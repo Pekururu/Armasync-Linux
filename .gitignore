@@ -4,3 +4,4 @@ src-tauri/target/
 .idea/
 .vscode/
 *.log
+src-tauri/gen/
