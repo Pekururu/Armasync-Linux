@@ -468,7 +468,7 @@ select:focus { border-color: var(--accent); }
 .display-choices strong { font-size: 12px; font-weight: 600; }
 .display-choices strong i { margin-left: 5px; padding: 2px 4px; color: var(--accent); background: rgba(224,166,60,.08); border-radius: var(--radius-ctl); font-size: 11px; font-style: normal; text-transform: uppercase; }
 .display-choices small { margin-top: 6px; color: var(--subtle); font-size: 11px; line-height: 1.4; }
-.setting-list { padding: 0 12px; }
+.setting-list { padding: 2px 12px 4px; }
 .launch-setting-row { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid transparent; }
 .launch-setting-row:last-child { border-bottom: 0; }
 .launch-setting-row strong, .launch-setting-row small { display: block; }
@@ -907,7 +907,7 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .voice-extras { gap: 8px; }
 .options-card > header { min-height: 46px; }
 .display-choices label { min-height: 54px; }
-.launch-setting-row { min-height: 40px; }
+.launch-setting-row { min-height: 48px; }
 
 .repository-layout { grid-template-columns: 240px minmax(0, 1fr); }
 .repository-stage-header { min-height: 66px; padding: 10px 14px; }
