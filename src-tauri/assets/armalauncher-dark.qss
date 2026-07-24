@@ -1,0 +1,64 @@
+/* Arma Launcher Dark — a restrained TeamSpeak 3 color skin. */
+QWidget {
+    background-color: #15191f;
+    color: #d9dee6;
+    selection-background-color: #6b4e22;
+    selection-color: #ffffff;
+}
+
+QMainWindow, QDialog, QWizard, QDockWidget { background-color: #15191f; }
+QMenuBar, QMenu, QToolBar, QStatusBar { background-color: #11161b; color: #cdd3db; }
+QMenuBar::item:selected, QMenu::item:selected { background-color: #292f38; }
+QToolTip { color: #eef1f4; background-color: #20262e; border: 1px solid #4a5562; }
+
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox,
+QDateEdit, QTimeEdit, QDateTimeEdit {
+    color: #e2e6eb;
+    background-color: #101419;
+    border: 1px solid #343d48;
+    border-radius: 2px;
+    padding: 3px;
+}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus,
+QSpinBox:focus, QDoubleSpinBox:focus { border-color: #9a7130; }
+QComboBox QAbstractItemView { background-color: #181d23; border: 1px solid #3a4451; }
+
+QPushButton, QToolButton {
+    color: #d9dee6;
+    background-color: #20262e;
+    border: 1px solid #3a4451;
+    border-radius: 2px;
+    padding: 4px 9px;
+}
+QPushButton:hover, QToolButton:hover { background-color: #292f38; border-color: #566170; }
+QPushButton:pressed, QToolButton:pressed { background-color: #11161b; }
+QPushButton:disabled, QToolButton:disabled { color: #626c78; background-color: #191e24; }
+
+QTreeView, QListView, QTableView, QAbstractItemView {
+    color: #d5dae1;
+    background-color: #15191f;
+    alternate-background-color: #181d23;
+    border: 1px solid #2a313b;
+    outline: 0;
+}
+QTreeView::item:hover, QListView::item:hover, QTableView::item:hover { background-color: #20262e; }
+QTreeView::item:selected, QListView::item:selected, QTableView::item:selected { background-color: #49391f; color: #f2f3f5; }
+QHeaderView::section { color: #aeb6c0; background-color: #1a1f26; border: 0; border-right: 1px solid #2a313b; border-bottom: 1px solid #2a313b; padding: 4px; }
+
+QTabWidget::pane { border: 1px solid #2a313b; background-color: #15191f; }
+QTabBar::tab { color: #8993a0; background-color: #12171c; border: 1px solid #2a313b; padding: 6px 10px; }
+QTabBar::tab:selected { color: #eef1f4; background-color: #1d232a; border-bottom-color: #d99b32; }
+QTabBar::tab:hover:!selected { color: #cbd1d8; background-color: #1a1f26; }
+
+QGroupBox { border: 1px solid #303843; border-radius: 2px; margin-top: 8px; padding-top: 8px; }
+QGroupBox::title { color: #bfc6ce; subcontrol-origin: margin; left: 7px; padding: 0 3px; }
+QProgressBar { color: #e5e8ec; background-color: #101419; border: 1px solid #343d48; text-align: center; }
+QProgressBar::chunk { background-color: #a97729; }
+QSplitter::handle { background-color: #2a313b; }
+
+QScrollBar:vertical { width: 11px; background: #11161b; margin: 0; }
+QScrollBar:horizontal { height: 11px; background: #11161b; margin: 0; }
+QScrollBar::handle { min-height: 24px; min-width: 24px; background: #3a4451; border-radius: 3px; }
+QScrollBar::handle:hover { background: #4a5664; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
