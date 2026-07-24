@@ -1,6 +1,6 @@
 [package]
 name = "armasync"
-version = "0.2.6"
+version = "0.3.0"
 description = "A native Linux Arma 3 launcher and addon manager"
 authors = ["Armasync contributors"]
 license = "GPL-3.0-only"
