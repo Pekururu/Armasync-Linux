@@ -298,6 +298,14 @@ export default function App() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isRescanning, setIsRescanning] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [missingDeps, setMissingDeps] = useState<Array<{ id: string; label: string; purpose: string; hint: string }>>([]);
+  const [depsDismissed, setDepsDismissed] = useState(false);
+  useEffect(() => {
+    void invoke<Array<{ id: string; label: string; purpose: string; installed: boolean; hint: string }>>("host_dependencies")
+      .then((deps) => setMissingDeps(deps.filter((dep) => !dep.installed)))
+      .catch(() => undefined);
+  }, []);
+
   const [teamspeakInstalled, setTeamspeakInstalled] = useState(false);
   const [teamspeakRunning, setTeamspeakRunning] = useState(false);
   const [teamspeakBusy, setTeamspeakBusy] = useState(false);
@@ -746,6 +754,16 @@ export default function App() {
               <button className="button quiet" type="button" disabled={isRescanning} onClick={() => void rescanAll()}><Icon name="refresh" /> {isRescanning ? "Scanning…" : "Rescan"}</button>
             </div>
           </div>
+
+          {missingDeps.length > 0 && !depsDismissed && (
+            <div className="system-setup-notice">
+              <div><strong>System setup</strong><span>Some host tools Armasync relies on are missing — the related features stay disabled until they're installed.</span></div>
+              <ul>
+                {missingDeps.map((dep) => <li key={dep.id}><strong>{dep.label}</strong> — needed for {dep.purpose}. {dep.hint}</li>)}
+              </ul>
+              <button className="icon-button" type="button" aria-label="Dismiss system setup notice" title="Dismiss" onClick={() => setDepsDismissed(true)}><Icon name="close" /></button>
+            </div>
+          )}
 
           <div className="addon-layout">
             <section

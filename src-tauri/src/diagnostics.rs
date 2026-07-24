@@ -473,3 +473,69 @@ fn timestamp() -> Result<u64, String> {
         .map(|duration| duration.as_secs())
         .map_err(|error| error.to_string())
 }
+
+/// A host tool the launcher shells out to, checked by PATH lookup only —
+/// nothing is executed, so probing is safe at startup.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostDependency {
+    pub id: String,
+    pub label: String,
+    pub purpose: String,
+    pub installed: bool,
+    pub hint: String,
+}
+
+pub fn host_dependencies() -> Vec<HostDependency> {
+    fn on_path(program: &str) -> bool {
+        std::env::var_os("PATH")
+            .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
+            .unwrap_or(false)
+    }
+    fn dep(id: &str, label: &str, purpose: &str, installed: bool, hint: &str) -> HostDependency {
+        HostDependency {
+            id: id.into(),
+            label: label.into(),
+            purpose: purpose.into(),
+            installed,
+            hint: hint.into(),
+        }
+    }
+    vec![
+        dep(
+            "steam",
+            "Steam",
+            "installing and launching Arma 3 with Proton",
+            on_path("steam") || crate::steam::discover_arma().is_some(),
+            "Install Steam from your distribution's repositories.",
+        ),
+        dep(
+            "protontricks",
+            "protontricks",
+            "TeamSpeak and ACRE voice setup",
+            on_path("protontricks") && on_path("protontricks-launch"),
+            "Install the protontricks package (or `pipx install protontricks`); the Flatpak build is not sufficient.",
+        ),
+        dep(
+            "wireplumber",
+            "WirePlumber",
+            "audio device detection",
+            on_path("wpctl"),
+            "Install the wireplumber package.",
+        ),
+        dep(
+            "pipewire-pulse",
+            "PipeWire PulseAudio bridge",
+            "TeamSpeak audio under Proton",
+            on_path("pipewire-pulse"),
+            "Install the pipewire-pulse package.",
+        ),
+        dep(
+            "zstd",
+            "zstd",
+            "restore points and support bundles",
+            on_path("zstd") && on_path("tar"),
+            "Install the zstd package.",
+        ),
+    ]
+}

@@ -263,6 +263,13 @@ async fn run_diagnostics() -> Result<model::DiagnosticReport, String> {
 }
 
 #[tauri::command]
+async fn host_dependencies() -> Result<Vec<diagnostics::HostDependency>, String> {
+    tokio::task::spawn_blocking(diagnostics::host_dependencies)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn collect_support_bundle() -> Result<model::SupportBundle, String> {
     tokio::task::spawn_blocking(diagnostics::collect_support_bundle)
         .await
@@ -350,6 +357,7 @@ pub fn run() {
             preview_launcher_options,
             reset_launcher_options,
             run_diagnostics,
+            host_dependencies,
             collect_support_bundle,
             install_mfc140_repair,
             launch_arma

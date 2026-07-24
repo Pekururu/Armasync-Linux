@@ -1021,3 +1021,12 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .resize-northeast { top: 0; right: 0; width: 10px; height: 10px; cursor: ne-resize; }
 .resize-southwest { bottom: 0; left: 0; width: 10px; height: 10px; cursor: sw-resize; }
 .resize-southeast { bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; }
+
+/* System setup notice: shown on the Addons tab only when host tools are missing. */
+.system-setup-notice { position: relative; margin-bottom: 12px; padding: 11px 44px 12px 14px; background: rgba(224, 166, 60, .05); border: 1px solid rgba(224, 166, 60, .22); border-radius: var(--radius-card); }
+.system-setup-notice > div strong { font-size: var(--font-small); font-weight: 650; }
+.system-setup-notice > div span { margin-left: 8px; color: var(--muted); font-size: var(--font-caption); }
+.system-setup-notice ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.system-setup-notice li { color: var(--muted); font-size: var(--font-caption); line-height: 1.45; }
+.system-setup-notice li strong { color: var(--text); font-weight: 600; }
+.system-setup-notice .icon-button { position: absolute; top: 9px; right: 9px; border-color: transparent; }

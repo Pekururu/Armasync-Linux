@@ -35,11 +35,13 @@
     "linux": {
       "deb": {
         "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"],
+        "recommends": ["steam", "protontricks", "pipewire", "wireplumber", "pipewire-pulse", "zstd"],
         "section": "games",
         "priority": "optional"
       },
       "rpm": {
         "depends": ["webkit2gtk4.1", "gtk3"],
+        "recommends": ["steam", "protontricks", "pipewire", "wireplumber", "pipewire-pulse", "zstd"],
         "release": "1"
       }
     },

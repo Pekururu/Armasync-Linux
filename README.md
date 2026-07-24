@@ -7,6 +7,33 @@ Version 0.2.5 includes addon discovery and ordered groups, Arma3Sync-compatible
 repository synchronization with live progress and transfer controls, player and
 server configuration, Windows TeamSpeak 3/ACRE setup, and troubleshooting tools.
 
+## Requirements
+
+The GUI libraries (WebKitGTK 4.1, GTK 3) are declared as package dependencies
+and installed automatically with the deb/rpm/AUR packages.
+
+Host tools Armasync uses at runtime — install these from your distribution:
+
+**To play:**
+
+- **Steam** with **Arma 3** installed and a **Proton** compatibility tool
+  enabled for it.
+
+**For TeamSpeak/ACRE voice (optional):**
+
+- **protontricks** (provides `protontricks` and `protontricks-launch`).
+  Install the distro package or `pipx install protontricks` — the Flatpak
+  build is not sufficient, since Armasync needs both binaries on `PATH`.
+- **PipeWire** with **WirePlumber** (`wpctl`) and **pipewire-pulse** —
+  the default audio stack on current Fedora, Ubuntu, and Arch installs.
+
+**For restore points and support bundles (optional):**
+
+- **tar** and **zstd** (present by default on nearly every distribution).
+
+Armasync checks for these at startup and shows what's missing and how to
+install it; the Troubleshooting tab runs the same checks on demand.
+
 ## Development
 
 ```sh
