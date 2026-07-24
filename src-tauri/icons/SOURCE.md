@@ -1,12 +1,15 @@
 # Application icon
 
-The application icon is the official Lowlands Tactical site icon, fetched from:
+The Armasync logo: dark sync arrows on an amber diamond, designed for the
+project (2026-07-24). The canonical master is `source-1024.png` in this
+directory (1024 × 1024 RGBA PNG).
 
-`https://www.lowtac.nl/wp-content/uploads/2026/03/cropped-favicon.png`
+- SHA-256: `3c69cc603a8378abbb6e5c85e956545efa6230378256220b4e3df2146bbce46b`
 
-- Source dimensions: 512 × 512 RGBA PNG
-- SHA-256: `e548b24a2a7568b1f81605887cf718f8028f398b97e257b727118d319a7151ce`
-- Retrieved: 2026-07-23
+All platform icon files in this directory were generated from that master
+with `pnpm tauri icon src-tauri/icons/source-1024.png`. Re-run that command
+after changing the master. The `android/` and `ios/` outputs it produces are
+deleted — this is a Linux desktop application.
 
-The platform-specific icon files in this directory were generated from that
-source with `tauri icon`.
+Known limit: the glyph is readable at 32 px (the smallest size shipped) but
+not at 16 px; if a tray icon is ever added, draw a simplified variant.
