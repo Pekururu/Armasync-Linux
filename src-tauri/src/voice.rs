@@ -7,11 +7,42 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 use crate::model::{
-    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult, RuntimeComponentResult,
-    RuntimeSetupResult, VoiceRuntimeComponent, VoiceStatus,
+    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult, RadioInstallResult,
+    RadioPluginStatus, RuntimeComponentResult, RuntimeSetupResult, VoiceRuntimeComponent,
+    VoiceStatus,
 };
 
 const APP_ID: &str = "107410";
+
+/// Supported radio mods and how to recognise their TeamSpeak 3 plugin.
+/// Both plugins install the same way and coexist in TeamSpeak; the mission's
+/// loaded mods decide which radio is active in game.
+struct RadioSpec {
+    id: &'static str,
+    label: &'static str,
+    mod_keys: &'static [&'static str],
+    plugin_names: &'static [&'static str],
+}
+
+const RADIOS: &[RadioSpec] = &[
+    RadioSpec {
+        id: "acre2",
+        label: "ACRE2",
+        mod_keys: &["acre2"],
+        plugin_names: &["acre2_win64.dll", "acre2_win64.ts3_plugin"],
+    },
+    RadioSpec {
+        id: "tfar",
+        label: "TFAR",
+        mod_keys: &["task_force_radio", "tfar"],
+        plugin_names: &[
+            "task_force_radio_win64.dll",
+            "task_force_radio_win64.ts3_plugin",
+            "tfar_win64.dll",
+            "tfar_win64.ts3_plugin",
+        ],
+    },
+];
 const TS_VERSION: &str = "3.6.2";
 const TS_URL: &str =
     "https://files.teamspeak-services.com/releases/client/3.6.2/TeamSpeak3-Client-win64-3.6.2.exe";
@@ -46,32 +77,58 @@ pub fn status() -> VoiceStatus {
         .map(|path| path.join("plugins"));
 
     let discovered = crate::sources::catalog().unwrap_or_default();
-    let acre_directory = find_catalog_mod(&discovered, "acre2").or_else(|| {
-        game_directory
-            .as_ref()
-            .and_then(|path| find_game_mod(path, "acre2"))
-    });
     let cba_directory = find_catalog_mod(&discovered, "cba_a3").or_else(|| {
         game_directory
             .as_ref()
             .and_then(|path| find_game_mod(path, "cba_a3"))
     });
-    let acre_plugin_source = acre_directory.as_ref().and_then(|directory| {
-        WalkDir::new(directory)
-            .max_depth(8)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(Result::ok)
-            .find(|entry| entry.file_type().is_file() && is_acre_plugin(entry.path()))
-            .map(walkdir::DirEntry::into_path)
-    });
-    let acre_plugin_destination = match (&plugin_directory, &acre_plugin_source) {
-        (Some(directory), Some(source)) => source.file_name().map(|name| directory.join(name)),
-        _ => None,
-    };
-    let acre_plugin_installed = acre_plugin_destination
-        .as_ref()
-        .is_some_and(|path| path.is_file());
+    let radio_plugins: Vec<RadioPluginStatus> = RADIOS
+        .iter()
+        .map(|spec| {
+            let mod_directory = spec.mod_keys.iter().find_map(|key| {
+                find_catalog_mod(&discovered, key).or_else(|| {
+                    game_directory
+                        .as_ref()
+                        .and_then(|path| find_game_mod(path, key))
+                })
+            });
+            let plugin_source = mod_directory.as_ref().and_then(|directory| {
+                WalkDir::new(directory)
+                    .max_depth(8)
+                    .follow_links(false)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .find(|entry| {
+                        entry.file_type().is_file()
+                            && matches_plugin(entry.path(), spec.plugin_names)
+                    })
+                    .map(walkdir::DirEntry::into_path)
+            });
+            let plugin_destination = match (&plugin_directory, &plugin_source) {
+                (Some(directory), Some(source)) => {
+                    source.file_name().map(|name| directory.join(name))
+                }
+                _ => None,
+            };
+            let plugin_installed = plugin_destination
+                .as_ref()
+                .is_some_and(|path| path.is_file());
+            RadioPluginStatus {
+                id: spec.id.into(),
+                label: spec.label.into(),
+                mod_directory: display(mod_directory),
+                plugin_source: display(plugin_source),
+                plugin_installed,
+                plugin_destination: display(plugin_destination),
+            }
+        })
+        .collect();
+    let detected_radios: Vec<&RadioPluginStatus> = radio_plugins
+        .iter()
+        .filter(|radio| radio.mod_directory.is_some())
+        .collect();
+    let radios_connected = !detected_radios.is_empty()
+        && detected_radios.iter().all(|radio| radio.plugin_installed);
     let dark_theme_path = prefix_directory.as_deref().map(dark_theme_path);
     let dark_theme_installed = dark_theme_path.as_ref().is_some_and(|path| path.is_file());
     let protontricks_available = command_exists("protontricks");
@@ -99,14 +156,21 @@ pub fn status() -> VoiceStatus {
     if teamspeak_executable.is_none() {
         notes.push("Install Windows TeamSpeak 3.6.2 for all users in Arma's prefix.".into());
     }
-    if acre_directory.is_none() {
-        notes.push("ACRE2 was not found in the configured addon sources.".into());
+    if detected_radios.is_empty() {
+        notes.push("No radio mod (ACRE2 or TFAR) was found in the configured addon sources.".into());
     }
     if cba_directory.is_none() {
-        notes.push("CBA_A3 was not found; ACRE2 requires it.".into());
+        notes.push("CBA_A3 was not found; ACRE2 and TFAR require it.".into());
     }
-    if acre_plugin_source.is_some() && !acre_plugin_installed {
-        notes.push("Install the ACRE2 64-bit TeamSpeak plugin.".into());
+    for radio in &detected_radios {
+        if radio.plugin_source.is_some() && !radio.plugin_installed {
+            notes.push(format!("Install the {} 64-bit TeamSpeak plugin.", radio.label));
+        } else if radio.plugin_source.is_none() {
+            notes.push(format!(
+                "{} was found, but no 64-bit TeamSpeak plugin file exists inside its mod folder.",
+                radio.label
+            ));
+        }
     }
     if !pipewire_available {
         notes.push(
@@ -118,8 +182,7 @@ pub fn status() -> VoiceStatus {
         && pipewire_available
         && plugin_directory.is_some()
         && cba_directory.is_some()
-        && acre_directory.is_some()
-        && acre_plugin_installed;
+        && radios_connected;
 
     VoiceStatus {
         game_directory: display(game_directory),
@@ -134,11 +197,8 @@ pub fn status() -> VoiceStatus {
         teamspeak_installed: plugin_directory.is_some(),
         teamspeak_running,
         plugin_directory: display(plugin_directory),
-        acre_directory: display(acre_directory),
         cba_directory: display(cba_directory),
-        acre_plugin_source: display(acre_plugin_source),
-        acre_plugin_installed,
-        acre_plugin_destination: display(acre_plugin_destination),
+        radio_plugins,
         dark_theme_installed,
         dark_theme_path: display(dark_theme_path),
         runtime_components,
@@ -314,38 +374,57 @@ pub async fn install_teamspeak() -> Result<InstallerLaunchResult, String> {
     })
 }
 
-pub fn install_acre_plugin() -> Result<PluginInstallResult, String> {
+/// Installs the TeamSpeak plugin for every detected radio mod. Installing
+/// all of them keeps the client compatible with both ACRE and TFAR missions.
+pub fn install_radio_plugins() -> Result<Vec<RadioInstallResult>, String> {
     let current = status();
     if current.teamspeak_running {
-        return Err("Exit TeamSpeak completely before replacing its ACRE2 plugin".into());
+        return Err("Exit TeamSpeak completely before replacing its radio plugins".into());
     }
     if current.cba_directory.is_none() {
-        return Err("CBA_A3 was not found; ACRE2 requires it".into());
+        return Err("CBA_A3 was not found; ACRE2 and TFAR require it".into());
     }
-    let source = current
-        .acre_plugin_source
-        .map(PathBuf::from)
-        .ok_or_else(|| "No 64-bit ACRE2 TeamSpeak plugin was found".to_owned())?;
-    let destination = current
-        .acre_plugin_destination
-        .map(PathBuf::from)
-        .ok_or_else(|| "TeamSpeak 3 is not installed for all users in Arma's prefix".to_owned())?;
-    let parent = destination
-        .parent()
-        .ok_or_else(|| "invalid TeamSpeak plugin path".to_owned())?;
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let backup = if destination.exists() {
-        let path = destination.with_extension(format!("dll.backup-{}", timestamp()?));
-        fs::copy(&destination, &path).map_err(|error| error.to_string())?;
-        Some(path)
-    } else {
-        None
-    };
-    fs::copy(&source, &destination).map_err(|error| error.to_string())?;
-    Ok(PluginInstallResult {
-        destination: path_string(destination),
-        backup: display(backup),
-    })
+    if !current.teamspeak_installed {
+        return Err("TeamSpeak 3 is not installed for all users in Arma's prefix".into());
+    }
+    let mut results = Vec::new();
+    for radio in current
+        .radio_plugins
+        .iter()
+        .filter(|radio| radio.mod_directory.is_some())
+    {
+        let (Some(source), Some(destination)) = (
+            radio.plugin_source.as_deref().map(PathBuf::from),
+            radio.plugin_destination.as_deref().map(PathBuf::from),
+        ) else {
+            continue;
+        };
+        let parent = destination
+            .parent()
+            .ok_or_else(|| "invalid TeamSpeak plugin path".to_owned())?;
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        let backup = if destination.exists() {
+            let path = destination.with_extension(format!("dll.backup-{}", timestamp()?));
+            fs::copy(&destination, &path).map_err(|error| error.to_string())?;
+            Some(path)
+        } else {
+            None
+        };
+        fs::copy(&source, &destination).map_err(|error| error.to_string())?;
+        results.push(RadioInstallResult {
+            id: radio.id.clone(),
+            label: radio.label.clone(),
+            destination: path_string(destination),
+            backup: display(backup),
+        });
+    }
+    if results.is_empty() {
+        return Err(
+            "No installable radio plugin was found — install ACRE2 or TFAR from your repository first"
+                .into(),
+        );
+    }
+    Ok(results)
 }
 
 pub fn launch_teamspeak() -> Result<ProcessLaunchResult, String> {
@@ -476,14 +555,11 @@ fn find_game_mod(game: &Path, needle: &str) -> Option<PathBuf> {
         .map(|entry| entry.path())
 }
 
-fn is_acre_plugin(path: &Path) -> bool {
-    matches!(
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .map(str::to_ascii_lowercase)
-            .as_deref(),
-        Some("acre2_win64.dll" | "acre2_win64.ts3_plugin")
-    )
+fn matches_plugin(path: &Path, names: &[&str]) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|name| names.contains(&name.as_str()))
 }
 
 fn process_running(needle: &str) -> bool {

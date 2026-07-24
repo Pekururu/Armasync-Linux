@@ -137,11 +137,8 @@ pub struct VoiceStatus {
     pub teamspeak_installed: bool,
     pub teamspeak_running: bool,
     pub plugin_directory: Option<String>,
-    pub acre_directory: Option<String>,
     pub cba_directory: Option<String>,
-    pub acre_plugin_source: Option<String>,
-    pub acre_plugin_installed: bool,
-    pub acre_plugin_destination: Option<String>,
+    pub radio_plugins: Vec<RadioPluginStatus>,
     pub dark_theme_installed: bool,
     pub dark_theme_path: Option<String>,
     pub runtime_components: Vec<VoiceRuntimeComponent>,
@@ -179,6 +176,26 @@ pub struct InstallerLaunchResult {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInstallResult {
+    pub destination: String,
+    pub backup: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RadioPluginStatus {
+    pub id: String,
+    pub label: String,
+    pub mod_directory: Option<String>,
+    pub plugin_source: Option<String>,
+    pub plugin_installed: bool,
+    pub plugin_destination: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RadioInstallResult {
+    pub id: String,
+    pub label: String,
     pub destination: String,
     pub backup: Option<String>,
 }

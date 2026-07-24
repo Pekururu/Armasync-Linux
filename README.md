@@ -3,9 +3,10 @@
 A native Linux Arma3Sync replacement for Arma 3 unit play, retaining the
 familiar tab-based workflow while integrating Steam/Proton launching and ACRE.
 
-Version 0.2.5 includes addon discovery and ordered groups, Arma3Sync-compatible
+Armasync includes addon discovery and ordered groups, Arma3Sync-compatible
 repository synchronization with live progress and transfer controls, player and
-server configuration, Windows TeamSpeak 3/ACRE setup, and troubleshooting tools.
+server configuration, Windows TeamSpeak 3 radio setup (ACRE2 and TFAR), and
+troubleshooting tools.
 
 ## Requirements
 
@@ -19,7 +20,7 @@ Host tools Armasync uses at runtime — install these from your distribution:
 - **Steam** with **Arma 3** installed and a **Proton** compatibility tool
   enabled for it.
 
-**For TeamSpeak/ACRE voice (optional):**
+**For TeamSpeak voice — ACRE2 and/or TFAR (optional):**
 
 - **protontricks** (provides `protontricks` and `protontricks-launch`).
   Install the distro package or `pipx install protontricks` — the Flatpak
@@ -33,6 +34,12 @@ Host tools Armasync uses at runtime — install these from your distribution:
 
 Armasync checks for these at startup and shows what's missing and how to
 install it; the Troubleshooting tab runs the same checks on demand.
+
+## Planned
+
+- **Swifty repository support** — a second manifest adapter for Swifty's
+  `repo.json`/`.srf` format, reusing the existing verify/download engine.
+  Arma3Sync-compatible repositories are fully supported today.
 
 ## Development
 

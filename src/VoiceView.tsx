@@ -4,13 +4,14 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 
 type RuntimeComponent = { id: string; label: string; installed: boolean };
+type RadioPlugin = { id: string; label: string; modDirectory: string | null; pluginSource: string | null; pluginInstalled: boolean; pluginDestination: string | null };
 type VoiceStatus = {
   gameDirectory: string | null; prefixDirectory: string | null; prefixInitialized: boolean;
   protontricksAvailable: boolean; protontricksLaunchAvailable: boolean; pipewireAvailable: boolean;
   audioInput: string | null; audioOutput: string | null;
   teamspeakExecutable: string | null; teamspeakInstalled: boolean; teamspeakRunning: boolean;
-  pluginDirectory: string | null; acreDirectory: string | null; cbaDirectory: string | null;
-  acrePluginSource: string | null; acrePluginInstalled: boolean; acrePluginDestination: string | null;
+  pluginDirectory: string | null; cbaDirectory: string | null;
+  radioPlugins: RadioPlugin[];
   darkThemeInstalled: boolean; darkThemePath: string | null;
   runtimeComponents: RuntimeComponent[]; ready: boolean; notes: string[];
 };
@@ -101,8 +102,10 @@ export default function VoiceView({ active }: { active: boolean }) {
   async function installPlugin() {
     setBusy("plugin"); setError(null); setNotice(null);
     try {
-      const result = await invoke<PluginResult>("install_acre_plugin");
-      setNotice(`ACRE is connected to TeamSpeak.${result.backup ? " The previous plugin was safely backed up." : ""}`);
+      const results = await invoke<Array<{ id: string; label: string; destination: string; backup: string | null }>>("install_radio_plugins");
+      const labels = results.map((item) => item.label).join(" and ");
+      const backedUp = results.some((item) => item.backup);
+      setNotice(`${labels} connected to TeamSpeak.${backedUp ? " Previous plugins were safely backed up." : ""}`);
       await refresh();
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(null); }
@@ -122,7 +125,9 @@ export default function VoiceView({ active }: { active: boolean }) {
 
   const runtimesReady = status?.runtimeComponents.every((item) => item.installed) ?? false;
   const toolsReady = !!status?.protontricksAvailable && !!status?.protontricksLaunchAvailable;
-  const bridgeReady = !!status?.acreDirectory && !!status?.cbaDirectory && !!status?.acrePluginInstalled;
+  const detectedRadios = status?.radioPlugins.filter((radio) => radio.modDirectory) ?? [];
+  const pendingRadios = detectedRadios.filter((radio) => !radio.pluginInstalled);
+  const bridgeReady = detectedRadios.length > 0 && pendingRadios.length === 0 && !!status?.cbaDirectory;
 
   return <section className={`workspace voice-workspace ${active ? "" : "tab-hidden"}`}>
     <div className="workspace-heading"><div><h1>Voice</h1><p>Set up TeamSpeak and ACRE for Arma, then start voice from the launch bar.</p></div><div className="heading-actions"><span className={`voice-live ${status?.teamspeakRunning ? "online" : ""}`}>{status?.teamspeakRunning ? "TeamSpeak running" : "TeamSpeak off"}</span><button className="button quiet" type="button" disabled={busy !== null} onClick={() => void refresh()}><VIcon name="refresh"/> {busy === "refresh" ? "Checking…" : "Refresh"}</button></div></div>
@@ -142,7 +147,7 @@ export default function VoiceView({ active }: { active: boolean }) {
         </article>
 
         <article>
-          <span className={`step-number ${bridgeReady ? "ok" : ""}`}>{bridgeReady ? <VIcon name="check"/> : "3"}</span><div><h3>Connect ACRE</h3><p>{bridgeReady ? "ACRE is connected to TeamSpeak." : !status?.acreDirectory || !status?.cbaDirectory ? "Install ACRE2 and CBA_A3 from your repository first." : status?.teamspeakRunning ? "Close TeamSpeak to install the ACRE plugin." : "Install the ACRE plugin into TeamSpeak."}</p></div><button className="button" type="button" disabled={!status?.teamspeakInstalled || !status?.acrePluginSource || !status?.cbaDirectory || !!status?.teamspeakRunning || busy !== null} onClick={() => void installPlugin()}><VIcon name="link"/>{busy === "plugin" ? "Connecting…" : bridgeReady ? "Update" : "Connect"}</button>
+          <span className={`step-number ${bridgeReady ? "ok" : ""}`}>{bridgeReady ? <VIcon name="check"/> : "3"}</span><div><h3>Connect radio plugin</h3><p>{bridgeReady ? `Connected to TeamSpeak: ${detectedRadios.filter((radio) => radio.pluginInstalled).map((radio) => radio.label).join(", ")}.` : detectedRadios.length === 0 ? "Install ACRE2 or TFAR from your repository first." : !status?.cbaDirectory ? "Install CBA_A3 from your repository first." : status?.teamspeakRunning ? "Close TeamSpeak to install the radio plugins." : `Install the ${pendingRadios.map((radio) => radio.label).join(" and ")} plugin into TeamSpeak.`}</p></div><button className="button" type="button" disabled={!status?.teamspeakInstalled || detectedRadios.every((radio) => !radio.pluginSource) || !status?.cbaDirectory || !!status?.teamspeakRunning || busy !== null} onClick={() => void installPlugin()}><VIcon name="link"/>{busy === "plugin" ? "Connecting…" : bridgeReady ? "Update" : "Connect"}</button>
         </article>
 
         {(notice || error || (runtimeResult && !runtimeResult.success)) && <div className="voice-simple-output">{notice && <p className="operation-notice">{notice}</p>}{error && <p className="operation-error">{error}</p>}{runtimeResult && !runtimeResult.success && <div className="runtime-results">{runtimeResult.components.filter((item) => !item.success).map((item) => <div key={item.id}><StateMark ok={false}/><span><strong>Compatibility setup failed</strong><small>{item.detail}</small></span></div>)}<button type="button" onClick={() => void openPath(runtimeResult.logFile)}><VIcon name="folder"/> Open diagnostic log</button></div>}</div>}
