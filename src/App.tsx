@@ -918,13 +918,6 @@ export default function App() {
       <VoiceView active={activeTab === "Voice"} />
       <LauncherOptionsView active={activeTab === "Configuration"} onOptionsChanged={receiveLaunchOptions} />
       <TroubleshootingView active={activeTab === "Troubleshooting"} />
-      {activeTab !== "Addons" && activeTab !== "Repositories" && activeTab !== "ACRE" && activeTab !== "Configuration" && activeTab !== "Troubleshooting" && (
-        <section className="placeholder-view">
-          <span>{activeTab}</span>
-          <h1>We’ll build this tab together.</h1>
-          <p>The Addons workflow is the first active part of the launcher.</p>
-        </section>
-      )}
 
       <footer className="launchbar">
         <div className="launch-choices">

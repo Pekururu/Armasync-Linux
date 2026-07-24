@@ -323,10 +323,6 @@ select:focus { border-color: var(--accent); }
 .button.quiet { color: var(--muted); background: transparent; border-color: transparent; }
 .button.quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-raised); border-color: var(--border); }
 
-.placeholder-view { display: grid; place-content: center; justify-items: center; text-align: center; }
-.placeholder-view > span { color: var(--accent); font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
-.placeholder-view h1 { margin-top: 11px; font-size: 22px; }
-.placeholder-view p { margin-top: 8px; color: var(--muted); font-size: 13px; }
 
 .repository-workspace { position: relative; }
 .tab-hidden { display: none !important; }
