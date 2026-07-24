@@ -11,6 +11,9 @@ repository synchronization with live progress and transfer controls, player and
 server configuration, Windows TeamSpeak 3 radio setup (ACRE2 and TFAR), and
 troubleshooting tools.
 
+New here? The **[user guide](docs/USER_GUIDE.md)** walks you from a fresh
+install to playing with working radio.
+
 ## Installation
 
 **Arch Linux (and derivatives like CachyOS, EndeavourOS, Manjaro):**
