@@ -448,7 +448,7 @@ select:focus { border-color: var(--accent); }
 /* Configuration */
 .options-workspace, .troubleshoot-workspace { min-height: 0; }
 .options-loading { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
-.options-environment { min-height: 50px; display: flex; align-items: center; gap: 34px; margin-bottom: 12px; padding: 8px 14px; background: var(--strip); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.options-environment { min-height: 46px; display: flex; align-items: center; gap: 34px; margin-bottom: 12px; padding: 8px 14px; background: var(--strip); border: 1px solid var(--border); border-radius: var(--radius-card); }
 .options-environment > span { min-width: 0; display: grid; grid-template-columns: 25px auto; column-gap: 8px; align-items: center; }
 .options-environment .icon { grid-row: 1 / 3; color: var(--accent); }
 .options-environment small, .options-environment strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -456,6 +456,7 @@ select:focus { border-color: var(--accent); }
 .options-environment strong { margin-top: 3px; color: var(--text); font-size: 12px; font-weight: 600; }
 .options-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(420px,1fr) minmax(300px,.72fr); gap: 12px; }
 .options-main, .options-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: var(--border-bright) transparent; }
+.options-main > *, .options-side > *, .trouble-side > *, .voice-steps > *, .voice-sidebar > * { flex-shrink: 0; }
 .options-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; }
 .options-card > header { min-height: 55px; display: flex; align-items: center; gap: 10px; padding: 9px 13px; background: var(--surface-raised); border-bottom: 1px solid transparent; }
 .option-card-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: none; color: var(--accent); background: rgba(224,166,60,.07); border: 1px solid rgba(224,166,60,.2); border-radius: var(--radius-ctl); }
@@ -549,7 +550,7 @@ select:focus { border-color: var(--accent); }
 .identity-help strong { color: var(--muted); font-weight: 600; }
 .new-identity { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; color: #8fb19d; font-size: 11px; }
 .new-identity .icon { width: 11px; height: 11px; }
-.advanced-options > summary { min-height: 55px; display: grid; grid-template-columns: 29px minmax(0,1fr); align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; list-style: none; background: var(--surface-raised); }
+.advanced-options > summary { min-height: 48px; display: grid; grid-template-columns: 29px minmax(0,1fr); align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; list-style: none; background: var(--surface-raised); }
 .advanced-options > summary::-webkit-details-marker { display: none; }
 .advanced-options summary strong, .advanced-options summary small { display: block; }
 .advanced-options summary strong { font-size: 12px; font-weight: 620; }
@@ -566,7 +567,7 @@ select:focus { border-color: var(--accent); }
 .options-message.error, .trouble-message.error { color: #dda39d; background: rgba(181,77,68,.08); border-color: rgba(181,92,82,.3); }
 
 /* Troubleshooting */
-.trouble-summary { min-height: 57px; display: flex; align-items: center; gap: 27px; margin-bottom: 12px; padding: 8px 14px; background: var(--strip); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.trouble-summary { min-height: 50px; display: flex; align-items: center; gap: 27px; margin-bottom: 12px; padding: 8px 14px; background: var(--strip); border: 1px solid var(--border); border-radius: var(--radius-card); }
 .trouble-summary > div { display: flex; align-items: center; gap: 9px; margin-right: auto; }
 .trouble-summary-mark { width: 31px; height: 31px; display: grid; place-items: center; color: #81bc96; background: rgba(104,168,129,.08); border: 1px solid rgba(104,168,129,.23); border-radius: 50%; }
 .trouble-summary-mark.warning { color: var(--accent); background: rgba(224,166,60,.08); border-color: rgba(224,166,60,.23); }
@@ -978,11 +979,11 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .options-side,
 .trouble-side,
 .voice-sidebar { gap: 8px; }
-.options-card > header { min-height: 50px; }
-.display-choices label { min-height: 62px; }
-.launch-setting-row { min-height: 46px; }
-.voice-setup-list { grid-template-rows: 52px repeat(3, minmax(78px, 1fr)) auto; }
-.voice-setup-list > article { min-height: 78px; padding: 9px 12px; }
+.options-card > header { min-height: 46px; }
+.display-choices label { min-height: 54px; }
+.launch-setting-row { min-height: 40px; }
+.voice-setup-list { grid-template-rows: 52px repeat(3, minmax(70px, 1fr)) auto; }
+.voice-setup-list > article { min-height: 70px; padding: 9px 12px; }
 
 .repository-layout { grid-template-columns: 240px minmax(0, 1fr); }
 .repository-stage-header { min-height: 66px; padding: 10px 14px; }
@@ -1076,3 +1077,14 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .repository-column-labels,
 .panel-footer { background: transparent; }
 .context-separator { background: transparent; }
+
+/* Frameless-window resize grips (see ResizeGrips in App.tsx). */
+.resize-grip { position: fixed; z-index: 300; }
+.resize-north { top: 0; left: 10px; right: 10px; height: 4px; cursor: n-resize; }
+.resize-south { bottom: 0; left: 10px; right: 10px; height: 4px; cursor: s-resize; }
+.resize-west { left: 0; top: 10px; bottom: 10px; width: 4px; cursor: w-resize; }
+.resize-east { right: 0; top: 10px; bottom: 10px; width: 4px; cursor: e-resize; }
+.resize-northwest { top: 0; left: 0; width: 10px; height: 10px; cursor: nw-resize; }
+.resize-northeast { top: 0; right: 0; width: 10px; height: 10px; cursor: ne-resize; }
+.resize-southwest { bottom: 0; left: 0; width: 10px; height: 10px; cursor: sw-resize; }
+.resize-southeast { bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; }

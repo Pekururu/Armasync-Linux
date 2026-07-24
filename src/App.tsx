@@ -1,5 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+const resizeEdges = ["North", "South", "East", "West", "NorthWest", "NorthEast", "SouthWest", "SouthEast"] as const;
+function ResizeGrips() {
+  return <>{resizeEdges.map((edge) => (
+    <div key={edge} className={`resize-grip resize-${edge.toLowerCase()}`} onPointerDown={(event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void getCurrentWindow().startResizeDragging(edge);
+    }} />
+  ))}</>;
+}
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { type DragEvent, type MouseEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -660,6 +672,7 @@ export default function App() {
 
   return (
     <main className="app-shell" onKeyDown={handleKeyboard} onPointerDown={() => setContextMenu(null)}>
+      <ResizeGrips />
       <header className="titlebar" data-tauri-drag-region onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest(".window-controls")) void getCurrentWindow().toggleMaximize(); }}>
         <div className="brand" data-tauri-drag-region>
           <img className="brand-mark" src={appIconUrl} alt="" draggable={false} data-tauri-drag-region />
