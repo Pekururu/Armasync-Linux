@@ -8,8 +8,10 @@ directory (1024 × 1024 RGBA PNG).
 
 All platform icon files in this directory were generated from that master
 with `pnpm tauri icon src-tauri/icons/source-1024.png`. Re-run that command
-after changing the master. The `android/` and `ios/` outputs it produces are
-deleted — this is a Linux desktop application.
+after changing the master. This is a Linux desktop application, so the
+non-Linux outputs it produces are deleted afterwards: the `android/` and
+`ios/` directories, the Windows files (`icon.ico`, `Square*Logo.png`,
+`StoreLogo.png`), and the macOS `icon.icns`.
 
 Known limit: the glyph is readable at 32 px (the smallest size shipped) but
 not at 16 px; if a tray icon is ever added, draw a simplified variant.
