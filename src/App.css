@@ -155,7 +155,7 @@ select { height: 34px; padding: 0 28px 0 9px; color: var(--muted); color-scheme:
 select option { color: var(--text); background-color: var(--surface-raised); }
 select option:checked { color: #f1f3f5; background-color: rgba(224, 166, 60, .25); }
 select:focus { border-color: var(--accent); }
-.column-labels { display: flex; align-items: center; justify-content: space-between; padding: 0 15px 0 39px; color: var(--subtle); background: var(--strip); border-bottom: 1px solid transparent; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
+.column-labels { display: flex; align-items: center; justify-content: space-between; padding: 0 21px 0 45px; color: var(--subtle); background: var(--strip); border-bottom: 1px solid transparent; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
 .addon-list { min-height: 0; overflow: auto; scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin; }
 .addon-row { width: 100%; min-height: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; padding: 3px 10px; text-align: left; background: transparent; border: 0; border-bottom: 1px solid transparent; cursor: default; }
 .addon-row.ordered { grid-template-columns: 44px minmax(0, 1fr); }
@@ -186,7 +186,7 @@ select:focus { border-color: var(--accent); }
 .addon-name { flex: 0 1 auto; color: var(--text); font-size: 12px; font-weight: 550; }
 .addon-folder { flex: 1 1 72px; min-width: 34px; color: var(--subtle); font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 11px; }
 .order-number { width: 19px; height: 19px; display: grid; place-items: center; color: var(--muted); background: var(--inset); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-size: 12px; }
-.groups-panel .column-labels { padding-left: 65px; }
+.groups-panel .column-labels { padding-left: 71px; }
 .panel-footer { display: flex; align-items: center; gap: 15px; padding: 0 13px; color: var(--subtle); background: var(--strip); border-top: 1px solid transparent; font-size: 12px; }
 .panel-footer span { display: flex; align-items: center; gap: 5px; }
 .panel-footer .source-type { width: auto; height: auto; gap: 5px; color: var(--subtle); }
@@ -320,6 +320,8 @@ select:focus { border-color: var(--accent); }
 .button.primary-small { color: var(--on-accent); background: var(--accent); border-color: var(--accent-bright); font-weight: 700; }
 .button.primary-small:hover { background: var(--accent-bright); }
 .button:disabled { opacity: .42; cursor: not-allowed; }
+.button.quiet { color: var(--muted); background: transparent; border-color: transparent; }
+.button.quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-raised); border-color: var(--border); }
 
 .placeholder-view { display: grid; place-content: center; justify-items: center; text-align: center; }
 .placeholder-view > span { color: var(--accent); font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
@@ -366,7 +368,7 @@ select:focus { border-color: var(--accent); }
 .eyebrow { display: block; color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .repository-stage-header h2 { margin-top: 5px; font-size: 16px; font-weight: 620; }
 .repository-stage-header p { margin-top: 4px; color: var(--subtle); font-size: 11px; }
-.repository-destination { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 12px 7px 16px; background: var(--inset); border-bottom: 1px solid transparent; }
+.repository-destination { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 12px 7px 16px; background: transparent; border-bottom: 1px solid transparent; }
 .repository-destination > span { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
 .repository-destination strong { flex: none; color: var(--muted); font-size: 11px; font-weight: 620; text-transform: uppercase; letter-spacing: .05em; }
 .repository-destination code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
@@ -374,10 +376,10 @@ select:focus { border-color: var(--accent); }
 .repository-destination button:hover, .repository-controls button:hover { color: var(--text); }
 .repository-destination button:disabled { opacity: .4; }
 .repository-destination .icon { width: 12px; height: 12px; }
-.repository-stats { min-height: 48px; display: flex; align-items: center; gap: 28px; padding: 0 16px; border-bottom: 1px solid transparent; background: var(--strip); }
+.repository-stats { min-height: 48px; display: flex; align-items: center; gap: 28px; padding: 0 16px; border-bottom: 1px solid transparent; }
 .repository-stats span { color: var(--subtle); font-size: 11px; }
 .repository-stats strong { margin-right: 4px; color: var(--text); font-size: 13px; font-weight: 620; }
-.repository-controls { min-height: 47px; display: flex; align-items: center; gap: 11px; padding: 7px 10px; border-bottom: 1px solid transparent; background: var(--strip); }
+.repository-controls { min-height: 47px; display: flex; align-items: center; gap: 11px; padding: 7px 10px; border-bottom: 1px solid transparent; }
 .repository-controls select { min-width: 230px; max-width: 390px; }
 .repository-controls > span { margin-left: auto; color: var(--subtle); font-size: 11px; }
 .repository-controls button + button { border-left: 1px solid transparent; padding-left: 10px; }
@@ -402,10 +404,8 @@ select:focus { border-color: var(--accent); }
 .repository-check-panel { min-width: 0; padding: 17px 15px; background: var(--surface-raised); overflow: auto; }
 .repository-check-panel h3 { margin: 8px 0 7px; font-size: 13px; font-weight: 620; }
 .repository-check-panel p { color: var(--muted); font-size: 11px; line-height: 1.55; }
-.check-summary { margin: 10px 0; display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; }
-.check-summary span { min-height: 48px; display: flex; flex-direction: column; justify-content: center; padding: 7px; color: var(--subtle); font-size: 11px; }
-.check-summary span:nth-child(odd) { border-right: 1px solid transparent; }
-.check-summary span:nth-child(-n+2) { border-bottom: 1px solid transparent; }
+.check-summary { margin: 10px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.check-summary span { min-height: 46px; display: flex; flex-direction: column; justify-content: center; padding: 7px 9px; color: var(--subtle); background: var(--inset); border-radius: var(--radius-ctl); font-size: 11px; }
 .check-summary strong { margin-bottom: 3px; color: var(--text); font-size: 13px; font-weight: 620; }
 .check-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .check-actions .button { flex: 1; justify-content: center; padding: 0 8px; }
@@ -1001,8 +1001,8 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .repository-card.selected,
 .repository-addon-row.selected { box-shadow: none; }
 .column-labels,
-.repository-column-labels,
 .panel-footer { background: transparent; }
+.repository-column-labels { background: var(--surface); }
 .context-separator { background: transparent; }
 
 /* Frameless-window resize grips (see ResizeGrips in App.tsx). */
