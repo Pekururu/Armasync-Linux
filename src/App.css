@@ -656,13 +656,6 @@ select:focus { border-color: var(--accent); }
 .voice-setup-list > article .button { min-width: 104px; justify-content: center; }
 .voice-simple-output { padding: 10px 14px; background: var(--strip); }
 .voice-simple-output .operation-notice, .voice-simple-output .operation-error { margin: 0; }
-.voice-launch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
-.voice-launch-icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; color: var(--accent); background: rgba(224,166,60,.08); border: 1px solid rgba(224,166,60,.22); border-radius: 50%; }
-.voice-launch-icon .icon { width: 16px; height: 16px; }
-.voice-launch-row strong, .voice-launch-row small { display: block; }
-.voice-launch-row strong { font-size: 12px; font-weight: 620; }
-.voice-launch-row small { margin-top: 2px; color: var(--muted); font-size: 11px; }
-.voice-launch-card .launch-button { width: 100%; min-width: 0; margin: 0; }
 .voice-audio-card > div { display: grid; grid-template-columns: 23px minmax(0,1fr); align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid transparent; }
 .voice-audio-card > div > .icon { color: #779cc1; }
 .voice-audio-card strong, .voice-audio-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -850,7 +843,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .conditional-repair p,
 .voice-setup-list > header > span,
 .voice-setup-list > article p,
-.voice-launch-card > p,
 .voice-audio-card small,
 .voice-theme-card > p,
 .theme-installed small,
@@ -945,6 +937,10 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 
 .launchbar { padding: 0 clamp(12px, 2vw, 24px); }
 .launch-summary { gap: 10px; font-size: var(--font-small); }
+.ts-button { height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; margin-left: 4px; color: var(--text); background: var(--surface-raised); border: 1px solid var(--border-bright); border-radius: var(--radius-ctl); font-size: var(--font-body); font-weight: 650; cursor: pointer; }
+.ts-button:hover:not(:disabled) { background: var(--surface-soft); }
+.ts-button.running { color: var(--green); background: rgba(104, 168, 129, .08); border-color: rgba(104, 168, 129, .3); cursor: default; opacity: 1; }
+.ts-button:disabled:not(.running) { opacity: .45; cursor: not-allowed; }
 .launch-button { height: 40px; margin-left: 4px; font-size: var(--font-body); }
 
 @media (max-width: 1100px) {

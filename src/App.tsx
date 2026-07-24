@@ -166,7 +166,7 @@ function scannedAddon(addon: DiscoveredAddon): Addon {
   };
 }
 
-type IconName = "search" | "refresh" | "folder" | "folders" | "plus" | "trash" | "edit" | "copy" | "play" | "cloud" | "repository" | "computer" | "dlc" | "external" | "close" | "grip";
+type IconName = "search" | "refresh" | "folder" | "folders" | "plus" | "trash" | "edit" | "copy" | "play" | "cloud" | "repository" | "computer" | "dlc" | "external" | "close" | "grip" | "voice";
 
 function Icon({ name }: { name: IconName }) {
   const paths = {
@@ -179,6 +179,7 @@ function Icon({ name }: { name: IconName }) {
     edit: <><path d="m4 20 4-1 11-11-3-3L5 16z"/><path d="m14 7 3 3"/></>,
     copy: <><rect x="8" y="8" width="11" height="11" rx="1"/><path d="M16 8V5H5v11h3"/></>,
     play: <path d="m8 5 11 7-11 7z" />,
+    voice: <><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></>,
     cloud: <path d="M7 18h10.5a4.5 4.5 0 0 0 .34-8.99A6 6 0 0 0 6.4 8.2 4.9 4.9 0 0 0 7 18Z" />,
     repository: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6" /><path d="M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="1.5" /><path d="M8 21h8M12 17v4" /></>,
@@ -292,6 +293,30 @@ export default function App() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isRescanning, setIsRescanning] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [teamspeakInstalled, setTeamspeakInstalled] = useState(false);
+  const [teamspeakRunning, setTeamspeakRunning] = useState(false);
+  const [teamspeakBusy, setTeamspeakBusy] = useState(false);
+  const [teamspeakError, setTeamspeakError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refreshInstalled = () => void invoke<{ teamspeakInstalled: boolean; teamspeakRunning: boolean }>("get_voice_status")
+      .then((voice) => { setTeamspeakInstalled(voice.teamspeakInstalled); setTeamspeakRunning(voice.teamspeakRunning); })
+      .catch(() => undefined);
+    refreshInstalled();
+    window.addEventListener("focus", refreshInstalled);
+    const interval = window.setInterval(() => void invoke<boolean>("get_teamspeak_running")
+      .then(setTeamspeakRunning).catch(() => undefined), 3000);
+    return () => { window.removeEventListener("focus", refreshInstalled); window.clearInterval(interval); };
+  }, []);
+
+  async function startTeamSpeak() {
+    setTeamspeakBusy(true); setTeamspeakError(null);
+    try {
+      await invoke("launch_teamspeak");
+      window.setTimeout(() => void invoke<boolean>("get_teamspeak_running").then(setTeamspeakRunning).catch(() => undefined), 1800);
+    } catch (cause) { setTeamspeakError(String(cause)); }
+    finally { setTeamspeakBusy(false); }
+  }
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [launchOptions, setLaunchOptions] = useState<OptionsView | null>(null);
   const [configurationDirty, setConfigurationDirty] = useState(false);
@@ -892,6 +917,7 @@ export default function App() {
           <span title={launchError ?? undefined}>{launchError ? "Launch failed — see Troubleshooting" : `${groupAddons.length} addons`}</span>
           <span className="separator" />
           <span>{launchOptions?.environment.selectedProton ?? "Proton"}</span>
+          {teamspeakInstalled && <button className={`ts-button ${teamspeakRunning ? "running" : ""}`} type="button" disabled={teamspeakBusy || teamspeakRunning} title={teamspeakError ?? (teamspeakRunning ? "TeamSpeak is running" : "Start TeamSpeak for ACRE voice")} onClick={() => void startTeamSpeak()}><Icon name="voice" /> {teamspeakRunning ? "Voice on" : teamspeakBusy ? "Starting…" : "TeamSpeak"}</button>}
           <button className="launch-button" type="button" disabled={configurationDirty || unavailableGroupAddons.length > 0 || isLaunching} title={configurationDirty ? "Save Configuration changes before launching" : unavailableGroupAddons.length ? "This group contains unavailable DLC" : launchError ?? "Launch game"} onClick={() => void launchGame()}><Icon name="play" /> {configurationDirty ? "Save configuration" : unavailableGroupAddons.length ? "DLC required" : isLaunching ? "Starting…" : "Launch game"}</button>
         </div>
       </footer>

@@ -17,8 +17,7 @@ type VoiceStatus = {
 type RuntimeResult = { backupArchive: string; logFile: string; components: Array<{ id: string; label: string; success: boolean; detail: string }>; success: boolean };
 type InstallerResult = { processId: number; backupArchive: string; installer: string; logFile: string };
 type PluginResult = { destination: string; backup: string | null };
-type LaunchResult = { processId: number; logFile: string };
-type VoiceAction = "runtime" | "install" | "plugin" | "launch" | "refresh" | "theme";
+type VoiceAction = "runtime" | "install" | "plugin" | "refresh" | "theme";
 
 function VIcon({ name }: { name: "voice" | "check" | "warning" | "refresh" | "play" | "download" | "link" | "audio" | "folder" | "tools" }) {
   const paths = {
@@ -109,16 +108,6 @@ export default function VoiceView({ active }: { active: boolean }) {
     finally { setBusy(null); }
   }
 
-  async function launchTeamSpeak() {
-    setBusy("launch"); setError(null); setNotice(null);
-    try {
-      await invoke<LaunchResult>("launch_teamspeak");
-      setNotice("TeamSpeak started.");
-      window.setTimeout(() => void refresh(), 1800);
-    } catch (cause) { setError(String(cause)); }
-    finally { setBusy(null); }
-  }
-
   async function changeDarkTheme(remove = false) {
     setBusy("theme"); setError(null); setNotice(null);
     try {
@@ -160,7 +149,6 @@ export default function VoiceView({ active }: { active: boolean }) {
       </section>
 
       <div className="voice-extras">
-        <section className="voice-launch-card"><div className="voice-launch-row"><span className="voice-launch-icon"><VIcon name="voice"/></span><div><strong>TeamSpeak 3</strong><small>{status?.teamspeakRunning ? "Voice chat is running." : status?.teamspeakInstalled ? "Ready to start." : "Complete the setup first."}</small></div></div><button className="launch-button" type="button" disabled={!status?.teamspeakInstalled || busy !== null || !!status?.teamspeakRunning} onClick={() => void launchTeamSpeak()}><VIcon name="play"/>{busy === "launch" ? "Starting…" : status?.teamspeakRunning ? "Running" : "Start TeamSpeak"}</button></section>
         <section className="voice-audio-card"><span className="eyebrow">Audio devices</span><div><VIcon name="audio"/><span><strong>{status?.audioInput ?? "No microphone detected"}</strong><small>Microphone</small></span></div><div><VIcon name="voice"/><span><strong>{status?.audioOutput ?? "No output detected"}</strong><small>Output</small></span></div></section>
         <section className="voice-theme-card"><div className="theme-card-heading"><div><span className="eyebrow">Optional appearance</span><h2>ArmaSync Dark</h2></div><span className="theme-swatches"><i/><i/><i/></span></div><p>A restrained dark skin matching this launcher. It changes colors only.</p>{status?.darkThemeInstalled ? <div className="theme-installed"><span><StateMark ok/><small>Installed</small></span><button type="button" disabled={busy !== null} onClick={() => void changeDarkTheme(true)}>Remove</button></div> : <button className="button" type="button" disabled={!status?.teamspeakInstalled || busy !== null} onClick={() => void changeDarkTheme()}>{busy === "theme" ? "Installing…" : "Install dark theme"}</button>}</section>
         <section><span className="eyebrow">One-time TeamSpeak settings</span><ol><li><span>1</span><p>Disable <strong>Gamepad and Joystick Hotkey Support</strong>.</p></li><li><span>2</span><p>Make sure the <strong>ACRE2 plugin</strong> is enabled.</p></li><li><span>3</span><p>Choose your microphone and output if TeamSpeak picked the wrong ones.</p></li></ol></section>
