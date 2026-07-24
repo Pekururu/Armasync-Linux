@@ -1,12 +1,43 @@
+<img src="src-tauri/icons/128x128.png" align="right" alt="" width="96">
+
 # Armasync
 
 A native Linux Arma3Sync replacement for Arma 3 unit play, retaining the
-familiar tab-based workflow while integrating Steam/Proton launching and ACRE.
+familiar tab-based workflow while integrating Steam/Proton launching and
+TeamSpeak radio setup.
 
 Armasync includes addon discovery and ordered groups, Arma3Sync-compatible
 repository synchronization with live progress and transfer controls, player and
 server configuration, Windows TeamSpeak 3 radio setup (ACRE2 and TFAR), and
 troubleshooting tools.
+
+## Installation
+
+**Arch Linux (and derivatives like CachyOS, EndeavourOS, Manjaro):**
+
+```sh
+yay -S armasync-bin
+```
+
+**Debian / Ubuntu:** download the `.deb` from the
+[latest release](https://github.com/Pekururu/Armasync-Linux/releases/latest),
+then:
+
+```sh
+sudo apt install ./Armasync_*_amd64.deb
+```
+
+**Fedora:** download the `.rpm` from the
+[latest release](https://github.com/Pekururu/Armasync-Linux/releases/latest),
+then:
+
+```sh
+sudo dnf install ./Armasync-*.x86_64.rpm
+```
+
+**Other distributions:** grab the `.AppImage` from the
+[latest release](https://github.com/Pekururu/Armasync-Linux/releases/latest),
+make it executable (`chmod +x`), and run it.
 
 ## Requirements
 
