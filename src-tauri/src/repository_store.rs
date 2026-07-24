@@ -93,7 +93,7 @@ fn validate_destination(value: &str) -> Result<PathBuf, String> {
 
 fn config_path() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armalauncher/repositories.toml"))
+    Ok(PathBuf::from(home).join(".config/armasync/repositories.toml"))
 }
 
 fn load() -> Result<RepositoryConfig, String> {

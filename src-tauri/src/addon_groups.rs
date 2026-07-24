@@ -139,7 +139,7 @@ fn default_group() -> AddonGroup {
 
 fn config_path() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armalauncher/addon-groups.toml"))
+    Ok(PathBuf::from(home).join(".config/armasync/addon-groups.toml"))
 }
 
 #[cfg(test)]

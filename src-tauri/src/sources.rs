@@ -403,7 +403,7 @@ fn config_path() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
         .ok_or_else(|| "could not determine the user configuration directory".to_owned())?;
-    Ok(base.join("armalauncher/config.toml"))
+    Ok(base.join("armasync/config.toml"))
 }
 
 fn load() -> Result<SourcesConfig, String> {
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn prefixed_source_is_a_boundary_for_nested_optional_addons() {
         let root = std::env::temp_dir().join(format!(
-            "armalauncher-addon-boundary-{}-{}",
+            "armasync-addon-boundary-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

@@ -860,7 +860,7 @@ where
         .map_err(|error| RepositoryError::Sync(error.to_string()))?
         .as_secs();
     let run_id = format!("{stamp}-{}", std::process::id());
-    let state_root = destination.join(".armalauncher");
+    let state_root = destination.join(".armasync");
     let staging_root = state_root.join("staging").join(&run_id);
     let backup_root = state_root.join("backups").join(&run_id);
     std::fs::create_dir_all(&staging_root)

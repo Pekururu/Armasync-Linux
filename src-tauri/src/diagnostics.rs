@@ -119,7 +119,7 @@ pub fn collect_support_bundle() -> Result<SupportBundle, String> {
     } else {
         state.clone()
     };
-    let archive = output_dir.join(format!("armalauncher-support-{stamp}.tar.zst"));
+    let archive = output_dir.join(format!("armasync-support-{stamp}.tar.zst"));
     fs::create_dir_all(&staging).map_err(|error| error.to_string())?;
     let result = (|| {
         let report = report();
@@ -138,7 +138,7 @@ pub fn collect_support_bundle() -> Result<SupportBundle, String> {
                 included += 1;
             }
         }
-        let config_dir = user_home()?.join(".config/armalauncher");
+        let config_dir = user_home()?.join(".config/armasync");
         let settings = config_dir.join("launcher.toml");
         if settings.is_file() {
             let input = fs::read_to_string(&settings).map_err(|error| error.to_string())?;
@@ -250,7 +250,7 @@ fn backups(installation: Option<&crate::steam::ArmaInstallation>) -> Vec<PrefixB
     };
     let mut result = Vec::new();
     for directory in [
-        parent.join(".armalauncher-backups"),
+        parent.join(".armasync-backups"),
         parent.join(".lowtac-linux-backups"),
     ] {
         let Ok(entries) = fs::read_dir(directory) else {
@@ -465,7 +465,7 @@ fn user_home() -> Result<PathBuf, String> {
         .ok_or_else(|| "HOME is not set".to_owned())
 }
 fn state_dir() -> Result<PathBuf, String> {
-    Ok(user_home()?.join(".local/state/armalauncher"))
+    Ok(user_home()?.join(".local/state/armasync"))
 }
 fn timestamp() -> Result<u64, String> {
     SystemTime::now()

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Arma Launcher",
+  "productName": "ArmaSync",
   "version": "0.2.6",
-  "identifier": "nl.lowtac.armalauncher",
+  "identifier": "nl.lowtac.armasync",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Arma Launcher",
+        "title": "ArmaSync",
         "decorations": false,
         "width": 1180,
         "height": 760,
@@ -26,7 +26,23 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage"],
+    "targets": ["appimage", "deb", "rpm"],
+    "category": "Game",
+    "homepage": "https://github.com/Pekururu/Armasync-Linux",
+    "publisher": "ArmaSync contributors",
+    "shortDescription": "Native Linux Arma 3 launcher and addon manager",
+    "longDescription": "A native Linux Arma3Sync replacement for Arma 3 unit play: addon groups, Arma3Sync-compatible repository synchronization, Steam/Proton launching, and TeamSpeak 3/ACRE setup.",
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"],
+        "section": "games",
+        "priority": "optional"
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "gtk3"],
+        "release": "1"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

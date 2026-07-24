@@ -1,0 +1,20 @@
+# Maintainer: Pekururu
+pkgname=armasync-bin
+pkgver=VERSION_PLACEHOLDER
+pkgrel=1
+pkgdesc="Native Linux Arma 3 launcher and addon manager (Arma3Sync-compatible)"
+arch=('x86_64')
+url="https://github.com/Pekururu/Armasync-Linux"
+license=('GPL-3.0-only')
+depends=('webkit2gtk-4.1' 'gtk3')
+provides=('armasync')
+conflicts=('armasync')
+options=('!debug' '!strip')
+source=("armasync-$pkgver.deb::https://github.com/Pekururu/Armasync-Linux/releases/download/v$pkgver/ArmaSync_${pkgver}_amd64.deb")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir"
+    bsdtar -xf "armasync-$pkgver.deb"
+    bsdtar -xf data.tar.* -C "$pkgdir/"
+}

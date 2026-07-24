@@ -1,4 +1,4 @@
-/* Arma Launcher Dark — a restrained TeamSpeak 3 color skin. */
+/* ArmaSync Dark — a restrained TeamSpeak 3 color skin. */
 QWidget {
     background-color: #15191f;
     color: #d9dee6;

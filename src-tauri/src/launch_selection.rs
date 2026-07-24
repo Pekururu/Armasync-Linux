@@ -59,5 +59,5 @@ fn config_path() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
         .ok_or_else(|| "could not determine the user configuration directory".to_owned())?;
-    Ok(base.join("armalauncher/launch-selection.toml"))
+    Ok(base.join("armasync/launch-selection.toml"))
 }

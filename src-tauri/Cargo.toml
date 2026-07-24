@@ -1,12 +1,15 @@
 [package]
-name = "armalauncher"
+name = "armasync"
 version = "0.2.6"
 description = "A native Linux Arma 3 launcher and addon manager"
-authors = ["Arma Launcher contributors"]
+authors = ["ArmaSync contributors"]
+license = "GPL-3.0-only"
+homepage = "https://github.com/Pekururu/Armasync-Linux"
+repository = "https://github.com/Pekururu/Armasync-Linux"
 edition = "2024"
 
 [lib]
-name = "armalauncher_lib"
+name = "armasync_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

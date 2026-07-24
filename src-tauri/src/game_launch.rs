@@ -87,7 +87,7 @@ pub fn launch(
         arguments.push(format!("-mod={}", ordered.join(";")));
     }
     ensure_steam_running()?;
-    let log_dir = user_home()?.join(".local/state/armalauncher/logs");
+    let log_dir = user_home()?.join(".local/state/armasync/logs");
     fs::create_dir_all(&log_dir).map_err(|error| error.to_string())?;
     let log = log_dir.join("arma-launch.log");
     let stdout = OpenOptions::new()

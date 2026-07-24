@@ -1,4 +1,4 @@
-# Arma Launcher
+# ArmaSync
 
 A native Linux Arma3Sync replacement for Arma 3 unit play, retaining the
 familiar tab-based workflow while integrating Steam/Proton launching and ACRE.

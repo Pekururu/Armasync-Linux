@@ -664,7 +664,7 @@ export default function App() {
         <div className="brand" data-tauri-drag-region>
           <img className="brand-mark" src={appIconUrl} alt="" draggable={false} data-tauri-drag-region />
           <span data-tauri-drag-region>
-            <strong>Arma Launcher</strong>
+            <strong>ArmaSync</strong>
           </span>
         </div>
         <div className="titlebar-right">

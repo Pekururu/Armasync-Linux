@@ -44,7 +44,7 @@ found:
 These warnings are diagnostic context, not a proven root cause. The new TeamSpeak
 tab backs up the prefix once, runs each component separately, stops on the first
 failure, and saves complete output to
-`~/.local/state/armalauncher/logs/voice-runtime.log`. This turns another status-1
+`~/.local/state/armasync/logs/voice-runtime.log`. This turns another status-1
 failure into an actionable component name and log rather than guessing.
 
 ## Compatibility setup rejected `-q`

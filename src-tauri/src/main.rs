@@ -1,3 +1,3 @@
 fn main() {
-    armalauncher_lib::run();
+    armasync_lib::run();
 }

@@ -21,7 +21,7 @@ from mod search directories.
 Configuration is written atomically to:
 
 ```text
-~/.config/armalauncher/config.toml
+~/.config/armasync/config.toml
 ```
 
 `XDG_CONFIG_HOME` is respected when present.

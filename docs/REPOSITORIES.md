@@ -47,7 +47,7 @@ longer published, and appends newly published members.
 - Remote path components are validated against traversal and absolute paths.
 - File checks compare expected size and SHA-1 when the manifest provides one.
 - Downloads are staged on the destination filesystem and verified before install.
-- Replaced files are backed up beneath `<destination>/.armalauncher/backups/`.
+- Replaced files are backed up beneath `<destination>/.armasync/backups/`.
 - An interrupted installation rolls back files already changed by that run.
 - Repository removal only removes launcher configuration; addon files remain.
 - Repository-declared deletions and untracked local-file deletion are not enabled.

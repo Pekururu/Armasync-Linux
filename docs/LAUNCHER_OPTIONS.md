@@ -1,6 +1,6 @@
 # Configuration
 
-Launcher settings are stored in `~/.config/armalauncher/launcher.toml`. The file
+Launcher settings are stored in `~/.config/armasync/launcher.toml`. The file
 uses a strict schema and is written atomically.
 
 The recommended display option does not pass a display-mode argument. Arma keeps
@@ -22,7 +22,7 @@ ordered list is passed as one `-mod=` argument through `protontricks-launch` for
 Steam app 107410.
 
 Addon groups, their exact load order, and optional repository-modset link are
-stored atomically in `~/.config/armalauncher/addon-groups.toml`. Groups can be
+stored atomically in `~/.config/armasync/addon-groups.toml`. Groups can be
 created, renamed, duplicated, or deleted. Duplicating a repository-linked group
 creates an independent copy so later repository updates cannot overwrite it.
 

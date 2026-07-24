@@ -17,7 +17,7 @@ plugin, and verify the displayed PipeWire input/output devices.
 
 ## Optional dark style
 
-The launcher includes its own color-only TeamSpeak style, `Arma Launcher Dark`.
+The launcher includes its own color-only TeamSpeak style, `ArmaSync Dark`.
 Installing it writes a QSS file to the Proton user's `%APPDATA%\TS3Client\styles`
 folder. It contains no executable plugin code and does not replace TeamSpeak
 icons or other assets. Select it once under TeamSpeak's Tools → Options → Design.
@@ -28,12 +28,12 @@ recovery copy rather than deleting unrelated TeamSpeak configuration.
 ## Safety and diagnostics
 
 - Prefix changes require confirmation and create timestamped `.tar.zst` backups
-  beside the compatdata directory under `.armalauncher-backups`.
+  beside the compatdata directory under `.armasync-backups`.
 - Runtime verbs execute separately and their complete output is retained.
 - The TeamSpeak installer is fetched only from TeamSpeak's HTTPS release host,
   size-limited, and checked for a Windows PE signature before execution.
 - TeamSpeak launch and installer output is retained under
-  `~/.local/state/armalauncher/logs/`.
+  `~/.local/state/armasync/logs/`.
 - An existing ACRE plugin is copied to a timestamped backup before replacement.
 - Plugin replacement is refused while TeamSpeak is running.
 - `mfc140` is intentionally not part of normal setup. It should only be added if

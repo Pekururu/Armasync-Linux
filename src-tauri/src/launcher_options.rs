@@ -364,7 +364,7 @@ fn decode_profile_name(value: &str) -> Option<String> {
 
 fn config_path() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armalauncher/launcher.toml"))
+    Ok(PathBuf::from(home).join(".config/armasync/launcher.toml"))
 }
 fn path_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
