@@ -157,8 +157,8 @@ select option:checked { color: #f1f3f5; background-color: rgba(224, 166, 60, .25
 select:focus { border-color: var(--accent); }
 .column-labels { display: flex; align-items: center; justify-content: space-between; padding: 0 21px 0 45px; color: var(--subtle); background: var(--strip); border-bottom: 1px solid transparent; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
 .addon-list { min-height: 0; overflow: auto; scrollbar-color: var(--border-bright) transparent; scrollbar-width: thin; }
-.addon-row { width: 100%; min-height: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; padding: 3px 10px; text-align: left; background: transparent; border: 0; border-bottom: 1px solid transparent; cursor: default; }
-.addon-row.ordered { grid-template-columns: 44px minmax(0, 1fr); }
+.addon-row { width: 100%; min-height: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 3px 10px; text-align: left; background: transparent; border: 0; border-bottom: 1px solid transparent; cursor: default; }
+.addon-row.ordered { grid-template-columns: 44px minmax(0, 1fr) auto; }
 .row-leading { display: flex; align-items: center; gap: 5px; }
 .addon-row:hover { background: rgba(255,255,255,.026); }
 .addon-row.selected { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
@@ -997,6 +997,12 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 /* No-divider refinements: selection is a rounded chip, strips are quiet. */
 .addon-row { width: calc(100% - 12px); margin: 1px 6px; border-radius: var(--radius-ctl); }
 .addon-row.selected { box-shadow: none; }
+.row-action { width: 24px; height: 24px; display: grid; place-items: center; color: var(--muted); border: 1px solid transparent; border-radius: var(--radius-ctl); opacity: 0; cursor: pointer; }
+.addon-row:hover .row-action,
+.addon-row:focus-visible .row-action,
+.addon-row.selected .row-action { opacity: 1; }
+.row-action:hover { color: var(--text); background: var(--surface-soft); border-color: var(--border); }
+.row-action .icon { width: 13px; height: 13px; }
 .repository-addon-row { margin: 1px 6px; border-radius: var(--radius-ctl); }
 .repository-card.selected,
 .repository-addon-row.selected { box-shadow: none; }

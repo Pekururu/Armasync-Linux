@@ -2,7 +2,7 @@
 name = "armasync"
 version = "0.2.6"
 description = "A native Linux Arma 3 launcher and addon manager"
-authors = ["ArmaSync contributors"]
+authors = ["Armasync contributors"]
 license = "GPL-3.0-only"
 homepage = "https://github.com/Pekururu/Armasync-Linux"
 repository = "https://github.com/Pekururu/Armasync-Linux"

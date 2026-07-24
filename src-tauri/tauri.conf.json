@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ArmaSync",
+  "productName": "Armasync",
   "version": "0.2.6",
   "identifier": "nl.lowtac.armasync",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ArmaSync",
+        "title": "Armasync",
         "decorations": false,
         "width": 1180,
         "height": 760,
@@ -29,7 +29,7 @@
     "targets": ["appimage", "deb", "rpm"],
     "category": "Game",
     "homepage": "https://github.com/Pekururu/Armasync-Linux",
-    "publisher": "ArmaSync contributors",
+    "publisher": "Armasync contributors",
     "shortDescription": "Native Linux Arma 3 launcher and addon manager",
     "longDescription": "A native Linux Arma3Sync replacement for Arma 3 unit play: addon groups, Arma3Sync-compatible repository synchronization, Steam/Proton launching, and TeamSpeak 3/ACRE setup.",
     "linux": {

@@ -103,7 +103,7 @@ const initialGroups: AddonGroup[] = [
   { id: "default", name: "Default", addonIds: [], source: null },
 ];
 
-const tabs = ["Addons", "Repositories", "ACRE", "Configuration", "Troubleshooting"];
+const tabs = ["Addons", "Repositories", "Voice", "Configuration", "Troubleshooting"];
 
 const fallbackDlcs: DetectedDlc[] = [
   ["contact", "Arma 3 Contact", 1021790, false],
@@ -222,6 +222,8 @@ function AddonRow({
   onFocus,
   onContextMenu,
   canDrag = true,
+  onQuickAction,
+  quickActionLabel,
 }: {
   addon: Addon;
   selected: boolean;
@@ -237,6 +239,8 @@ function AddonRow({
   onFocus?: () => void;
   onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
   canDrag?: boolean;
+  onQuickAction?: () => void;
+  quickActionLabel?: string;
 }) {
   return (
     <button
@@ -260,6 +264,7 @@ function AddonRow({
         <span className="addon-name" title={addon.name}>{addon.name}</span>
         <span className="addon-folder" title={addon.folder}>{addon.folder}</span>
       </span>
+      {onQuickAction && <span className="row-action" role="button" tabIndex={-1} title={quickActionLabel} aria-label={quickActionLabel} onClick={(event) => { event.stopPropagation(); onQuickAction(); }} onDoubleClick={(event) => event.stopPropagation()}><Icon name={order !== undefined ? "close" : "plus"} /></span>}
     </button>
   );
 }
@@ -702,7 +707,7 @@ export default function App() {
         <div className="brand" data-tauri-drag-region>
           <img className="brand-mark" src={appIconUrl} alt="" draggable={false} data-tauri-drag-region />
           <span data-tauri-drag-region>
-            <strong>ArmaSync</strong>
+            <strong>Armasync</strong>
           </span>
         </div>
         <div className="titlebar-right">
@@ -715,7 +720,14 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="tabs" aria-label="Main navigation">
+      <nav className="tabs" aria-label="Main navigation" onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+        event.preventDefault();
+        const index = tabs.indexOf(activeTab);
+        const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+        setActiveTab(tabs[nextIndex]);
+        (event.currentTarget.children[nextIndex] as HTMLButtonElement | undefined)?.focus();
+      }}>
         {tabs.map((tab) => (
           <button key={tab} type="button" className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>
         ))}
@@ -783,6 +795,8 @@ export default function App() {
                     onContextMenu={(event) => openContextMenu(event, addon.id, "installed")}
                     onDragStart={(event) => beginDrag(event, addon.id, "installed")}
                     onDragEnd={finishDrag}
+                    onQuickAction={() => addSelected(addon.id)}
+                    quickActionLabel="Add to group"
                   />
                 ))}
                 {filteredDlcs.length > 0 && <div className="list-section-label"><span>DLC &amp; Creator DLC</span><span>{installedDlcCount} ready</span></div>}
@@ -799,6 +813,8 @@ export default function App() {
                     onContextMenu={(event) => openContextMenu(event, addon.id, "installed")}
                     onDragStart={(event) => beginDrag(event, addon.id, "installed")}
                     onDragEnd={finishDrag}
+                    onQuickAction={addon.available ? () => addSelected(addon.id) : undefined}
+                    quickActionLabel="Add to group"
                   />
                 ))}
                 {filteredAddons.length === 0 && <div className="empty-state">No installed addons match this filter.</div>}
@@ -856,6 +872,8 @@ export default function App() {
                     onContextMenu={(event) => openContextMenu(event, addon.id, "group")}
                     onDragStart={(event) => beginDrag(event, addon.id, "group")}
                     onDragEnd={finishDrag}
+                    onQuickAction={() => removeSelected(addon.id)}
+                    quickActionLabel="Remove from group"
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -879,7 +897,7 @@ export default function App() {
         </section>
       )}
       <RepositoryView active={activeTab === "Repositories"} defaultDestination={dlcDetection.gameDirectory} addonGroups={groups.map((group) => ({ id: group.id, name: group.name, source: group.source }))} onApplyModset={applyRepositoryModset} onSynchronized={async () => { await scanAddonCatalog(); }} />
-      <VoiceView active={activeTab === "ACRE"} />
+      <VoiceView active={activeTab === "Voice"} />
       <LauncherOptionsView active={activeTab === "Configuration"} onOptionsChanged={receiveLaunchOptions} />
       <TroubleshootingView active={activeTab === "Troubleshooting"} />
       {activeTab !== "Addons" && activeTab !== "Repositories" && activeTab !== "ACRE" && activeTab !== "Configuration" && activeTab !== "Troubleshooting" && (

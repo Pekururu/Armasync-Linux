@@ -17,7 +17,7 @@ plugin, and verify the displayed PipeWire input/output devices.
 
 ## Optional dark style
 
-The launcher includes its own color-only TeamSpeak style, `ArmaSync Dark`.
+The launcher includes its own color-only TeamSpeak style, `Armasync Dark`.
 Installing it writes a QSS file to the Proton user's `%APPDATA%\TS3Client\styles`
 folder. It contains no executable plugin code and does not replace TeamSpeak
 icons or other assets. Select it once under TeamSpeak's Tools → Options → Design.

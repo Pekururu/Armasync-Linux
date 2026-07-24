@@ -10,7 +10,7 @@ depends=('webkit2gtk-4.1' 'gtk3')
 provides=('armasync')
 conflicts=('armasync')
 options=('!debug' '!strip')
-source=("armasync-$pkgver.deb::https://github.com/Pekururu/Armasync-Linux/releases/download/v$pkgver/ArmaSync_${pkgver}_amd64.deb")
+source=("armasync-$pkgver.deb::https://github.com/Pekururu/Armasync-Linux/releases/download/v$pkgver/Armasync_${pkgver}_amd64.deb")
 sha256sums=('SKIP')
 
 package() {

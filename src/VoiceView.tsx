@@ -114,7 +114,7 @@ export default function VoiceView({ active }: { active: boolean }) {
       await invoke<PluginResult>(remove ? "remove_teamspeak_dark_theme" : "install_teamspeak_dark_theme");
       setNotice(remove
         ? "The optional dark theme was removed. Restart TeamSpeak if it was active."
-        : "Dark theme installed. In TeamSpeak, select “ArmaSync Dark” under Tools → Options → Design, then restart TeamSpeak.");
+        : "Dark theme installed. In TeamSpeak, select “Armasync Dark” under Tools → Options → Design, then restart TeamSpeak.");
       await refresh();
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(null); }
@@ -125,7 +125,7 @@ export default function VoiceView({ active }: { active: boolean }) {
   const bridgeReady = !!status?.acreDirectory && !!status?.cbaDirectory && !!status?.acrePluginInstalled;
 
   return <section className={`workspace voice-workspace ${active ? "" : "tab-hidden"}`}>
-    <div className="workspace-heading"><div><h1>ACRE</h1><p>Set up TeamSpeak voice integration for Arma, then start it from here.</p></div><div className="heading-actions"><span className={`voice-live ${status?.teamspeakRunning ? "online" : ""}`}>{status?.teamspeakRunning ? "TeamSpeak running" : "TeamSpeak off"}</span><button className="button quiet" type="button" disabled={busy !== null} onClick={() => void refresh()}><VIcon name="refresh"/> {busy === "refresh" ? "Checking…" : "Refresh"}</button></div></div>
+    <div className="workspace-heading"><div><h1>Voice</h1><p>Set up TeamSpeak and ACRE for Arma, then start voice from the launch bar.</p></div><div className="heading-actions"><span className={`voice-live ${status?.teamspeakRunning ? "online" : ""}`}>{status?.teamspeakRunning ? "TeamSpeak running" : "TeamSpeak off"}</span><button className="button quiet" type="button" disabled={busy !== null} onClick={() => void refresh()}><VIcon name="refresh"/> {busy === "refresh" ? "Checking…" : "Refresh"}</button></div></div>
 
     {!!status?.notes.length && <div className="voice-notes"><span className="eyebrow">Before you start</span><ul>{status.notes.map((note) => <li key={note}><StateMark ok={false}/><span>{note}</span></li>)}</ul></div>}
 
@@ -150,7 +150,7 @@ export default function VoiceView({ active }: { active: boolean }) {
 
       <div className="voice-extras">
         <section className="voice-audio-card"><span className="eyebrow">Audio devices</span><div><VIcon name="audio"/><span><strong>{status?.audioInput ?? "No microphone detected"}</strong><small>Microphone</small></span></div><div><VIcon name="voice"/><span><strong>{status?.audioOutput ?? "No output detected"}</strong><small>Output</small></span></div></section>
-        <section className="voice-theme-card"><div className="theme-card-heading"><div><span className="eyebrow">Optional appearance</span><h2>ArmaSync Dark</h2></div><span className="theme-swatches"><i/><i/><i/></span></div><p>A restrained dark skin matching this launcher. It changes colors only.</p>{status?.darkThemeInstalled ? <div className="theme-installed"><span><StateMark ok/><small>Installed</small></span><button type="button" disabled={busy !== null} onClick={() => void changeDarkTheme(true)}>Remove</button></div> : <button className="button" type="button" disabled={!status?.teamspeakInstalled || busy !== null} onClick={() => void changeDarkTheme()}>{busy === "theme" ? "Installing…" : "Install dark theme"}</button>}</section>
+        <section className="voice-theme-card"><div className="theme-card-heading"><div><span className="eyebrow">Optional appearance</span><h2>Armasync Dark</h2></div><span className="theme-swatches"><i/><i/><i/></span></div><p>A restrained dark skin matching this launcher. It changes colors only.</p>{status?.darkThemeInstalled ? <div className="theme-installed"><span><StateMark ok/><small>Installed</small></span><button type="button" disabled={busy !== null} onClick={() => void changeDarkTheme(true)}>Remove</button></div> : <button className="button" type="button" disabled={!status?.teamspeakInstalled || busy !== null} onClick={() => void changeDarkTheme()}>{busy === "theme" ? "Installing…" : "Install dark theme"}</button>}</section>
         <section><span className="eyebrow">One-time TeamSpeak settings</span><ol><li><span>1</span><p>Disable <strong>Gamepad and Joystick Hotkey Support</strong>.</p></li><li><span>2</span><p>Make sure the <strong>ACRE2 plugin</strong> is enabled.</p></li><li><span>3</span><p>Choose your microphone and output if TeamSpeak picked the wrong ones.</p></li></ol></section>
       </div>
     </div>

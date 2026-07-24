@@ -355,5 +355,5 @@ pub fn run() {
             launch_arma
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ArmaSync");
+        .expect("error while running Armasync");
 }

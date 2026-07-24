@@ -16,7 +16,7 @@ const TS_VERSION: &str = "3.6.2";
 const TS_URL: &str =
     "https://files.teamspeak-services.com/releases/client/3.6.2/TeamSpeak3-Client-win64-3.6.2.exe";
 const MAX_INSTALLER_BYTES: u64 = 250 * 1024 * 1024;
-const DARK_THEME_NAME: &str = "ArmaSync Dark.qss";
+const DARK_THEME_NAME: &str = "Armasync Dark.qss";
 const DARK_THEME: &str = include_str!("../assets/armasync-dark.qss");
 const RUNTIMES: [(&str, &str); 5] = [
     ("d3dcompiler_43", "D3D Compiler 43"),
@@ -234,7 +234,7 @@ fn install_runtimes(log_path: &Path) -> Result<Vec<RuntimeComponentResult>, Stri
         .write(true)
         .open(log_path)
         .map_err(|error| error.to_string())?;
-    writeln!(log, "ArmaSync voice runtime setup — {}", timestamp()?)
+    writeln!(log, "Armasync voice runtime setup — {}", timestamp()?)
         .map_err(|error| error.to_string())?;
     let mut results = Vec::new();
     for (id, label) in RUNTIMES {
@@ -403,7 +403,7 @@ pub fn remove_dark_theme() -> Result<PluginInstallResult, String> {
     let prefix = initialized_prefix()?;
     let destination = dark_theme_path(&prefix);
     if !destination.is_file() {
-        return Err("ArmaSync Dark is not installed".into());
+        return Err("Armasync Dark is not installed".into());
     }
     let backup = destination.with_extension(format!("qss.removed-{}", timestamp()?));
     fs::rename(&destination, &backup).map_err(|error| error.to_string())?;
