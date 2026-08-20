@@ -24,7 +24,7 @@ const MAX_PARALLEL_DOWNLOADS: usize = 8;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
-    #[error("the auto-config URL must use HTTPS")]
+    #[error("the auto-config URL must use HTTPS or HTTP")]
     InsecureUrl,
     #[error("invalid auto-config URL: {0}")]
     InvalidUrl(String),
@@ -297,7 +297,7 @@ where
 async fn download_autoconfig(source_url: &str) -> Result<RepositoryEndpoint, RepositoryError> {
     let parsed =
         Url::parse(source_url).map_err(|error| RepositoryError::InvalidUrl(error.to_string()))?;
-    if parsed.scheme() != "https" {
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
         return Err(RepositoryError::InsecureUrl);
     }
 

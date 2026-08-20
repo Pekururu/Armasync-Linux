@@ -7,7 +7,7 @@ familiar tab-based workflow while integrating Steam/Proton launching and
 TeamSpeak radio setup.
 
 Armasync includes addon discovery and ordered groups, Arma3Sync-compatible
-repository synchronization with live progress and transfer controls, player and
+repository synchronization (FTP/HTTP(S)) with live progress and transfer controls, player and
 server configuration, Windows TeamSpeak 3 radio setup (ACRE2 and TFAR), and
 troubleshooting tools.
 
