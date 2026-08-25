@@ -178,12 +178,7 @@ struct ManifestEntry {
 
 pub async fn inspect(source_url: &str) -> Result<RepositorySnapshot, RepositoryError> {
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host.clone(),
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     let (manifest, published_modsets) =
         tokio::task::spawn_blocking(move || fetch_repository_metadata(&transfer))
             .await
@@ -224,12 +219,7 @@ pub async fn plan_sync(
     destination: PathBuf,
 ) -> Result<SyncPlan, RepositoryError> {
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host,
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
         build_sync_plan(&manifest, &selected_addons, &destination)
@@ -238,8 +228,15 @@ pub async fn plan_sync(
     .map_err(|error| RepositoryError::Local(error.to_string()))?
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TransferProtocol {
+    Ftp,
+    Https,
+}
+
 #[derive(Clone)]
 struct TransferEndpoint {
+    protocol: TransferProtocol,
     host: String,
     port: i32,
     login: String,
@@ -265,12 +262,7 @@ where
         current_file: None,
     });
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host,
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
         let plan = build_sync_plan(&manifest, &selected_addons, &destination)?;
@@ -356,10 +348,13 @@ fn decode_autoconfig(
         .map(|(_, value)| value.to_owned())
         .ok_or_else(|| RepositoryError::Unsupported("missing protocol type".into()))?;
 
-    if protocol_name != "FTP" {
-        return Err(RepositoryError::Unsupported(format!(
-            "transfer protocol {protocol_name} is not implemented yet"
-        )));
+    match protocol_name.as_str() {
+        "FTP" | "HTTPS" => {}
+        _ => {
+            return Err(RepositoryError::Unsupported(format!(
+                "transfer protocol {protocol_name} is not implemented yet"
+            )));
+        }
     }
 
     Ok(RepositoryEndpoint {
@@ -377,9 +372,81 @@ fn decode_autoconfig(
     })
 }
 
+fn make_transfer_endpoint(
+    endpoint: &RepositoryEndpoint,
+) -> Result<TransferEndpoint, RepositoryError> {
+    let protocol = match endpoint.info.protocol.as_str() {
+        "FTP" => TransferProtocol::Ftp,
+        "HTTPS" => TransferProtocol::Https,
+        protocol => {
+            return Err(RepositoryError::Unsupported(format!(
+                "transfer protocol {protocol} is not implemented yet"
+            )));
+        }
+    };
+
+    let default_port = match protocol {
+        TransferProtocol::Ftp => 21,
+        TransferProtocol::Https => 443,
+    };
+
+    Ok(TransferEndpoint {
+        protocol,
+        host: endpoint.info.host.clone(),
+        port: endpoint.info.port.unwrap_or(default_port),
+        login: endpoint.login.clone(),
+        password: endpoint.password.clone(),
+    })
+}
+
 fn fetch_repository_metadata(
     endpoint: &TransferEndpoint,
 ) -> Result<(SyncManifest, Vec<PublishedModset>), RepositoryError> {
+    if endpoint.protocol == TransferProtocol::Https {
+        let base = if endpoint.port == 443 {
+            format!("https://{}", endpoint.host)
+        } else {
+            format!("https://{}:{}", endpoint.host, endpoint.port)
+        };
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .build()
+            .map_err(|error| RepositoryError::Transfer(error.to_string()))?;
+
+        let fetch = |path: &str, max_size: usize| -> Result<Vec<u8>, RepositoryError> {
+            let url = format!("{base}/{path}");
+            let mut request = client.get(&url);
+            if !endpoint.login.is_empty() {
+                request = request.basic_auth(&endpoint.login, Some(&endpoint.password));
+            }
+            let response = request
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status)
+                .map_err(|error| RepositoryError::Transfer(error.to_string()))?;
+            if response
+                .content_length()
+                .is_some_and(|size| size > max_size as u64)
+            {
+                return Err(RepositoryError::TooLarge);
+            }
+            let bytes = response
+                .bytes()
+                .map_err(|error| RepositoryError::Transfer(error.to_string()))?;
+            if bytes.len() > max_size {
+                return Err(RepositoryError::TooLarge);
+            }
+            Ok(bytes.to_vec())
+        };
+
+        let manifest_bytes = fetch(".a3s/sync", MAX_MANIFEST_SIZE)?;
+        let events_bytes = fetch(".a3s/events", MAX_AUTOCONFIG_SIZE)?;
+        return Ok((
+            decode_manifest(&manifest_bytes)?,
+            decode_events(&events_bytes)?,
+        ));
+    }
+
     let mut ftp = connect_ftp(endpoint)?;
     let manifest_bytes = ftp
         .retr_as_buffer(".a3s/sync")
@@ -982,6 +1049,12 @@ where
         for _ in 0..worker_count {
             workers.push(scope.spawn(|| {
                 let result = (|| {
+                    if endpoint.protocol == TransferProtocol::Https {
+                        return stage_https_worker(
+                            endpoint, entries, staging_root, total_bytes, control, on_progress,
+                            &next_entry, &completed_files, &downloaded_bytes, &failed, &progress_gate,
+                        );
+                    }
                     let mut ftp = connect_ftp(endpoint)?;
                     loop {
                         control.checkpoint()?;
@@ -1041,6 +1114,138 @@ where
     } else {
         Ok(())
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stage_https_worker<F>(
+    endpoint: &TransferEndpoint,
+    entries: &[&ManifestEntry],
+    staging_root: &Path,
+    total_bytes: u64,
+    control: &SyncControl,
+    on_progress: &F,
+    next_entry: &AtomicUsize,
+    completed_files: &AtomicUsize,
+    downloaded_bytes: &AtomicU64,
+    failed: &AtomicBool,
+    progress_gate: &Mutex<(u64, Instant)>,
+) -> Result<(), RepositoryError>
+where
+    F: Fn(SyncProgress) + Sync,
+{
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .http1_only()
+        .timeout(None)
+        .build()
+        .map_err(|error| RepositoryError::Transfer(error.to_string()))?;
+    loop {
+        control.checkpoint()?;
+        if failed.load(Ordering::Acquire) {
+            break;
+        }
+        let index = next_entry.fetch_add(1, Ordering::AcqRel);
+        let Some(entry) = entries.get(index).copied() else {
+            break;
+        };
+        download_entry_https(
+            &client, endpoint, entry, staging_root, total_bytes, entries.len(), control, failed,
+            downloaded_bytes, completed_files, progress_gate, on_progress,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn download_entry_https<F>(
+    client: &reqwest::blocking::Client,
+    endpoint: &TransferEndpoint,
+    entry: &ManifestEntry,
+    staging_root: &Path,
+    total_bytes: u64,
+    total_files: usize,
+    control: &SyncControl,
+    failed: &AtomicBool,
+    downloaded_bytes: &AtomicU64,
+    completed_files: &AtomicUsize,
+    progress_gate: &Mutex<(u64, Instant)>,
+    on_progress: &F,
+) -> Result<(), RepositoryError>
+where
+    F: Fn(SyncProgress) + Sync,
+{
+    let target = staging_root.join(&entry.local_path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    }
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&target)
+        .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    let remote = entry.remote_path.to_string_lossy().replace('\\', "/");
+    let base = if endpoint.port == 443 {
+        format!("https://{}", endpoint.host)
+    } else {
+        format!("https://{}:{}", endpoint.host, endpoint.port)
+    };
+    let url = format!("{base}/{remote}");
+    let current_file = entry.local_path.to_string_lossy().into_owned();
+    emit_download_progress(
+        downloaded_bytes, completed_files, total_bytes, total_files, &current_file,
+        progress_gate, on_progress, true,
+    )?;
+
+    if failed.load(Ordering::Acquire) {
+        return Err(RepositoryError::Cancelled);
+    }
+    let mut request = client.get(&url);
+    if !endpoint.login.is_empty() {
+        request = request.basic_auth(&endpoint.login, Some(&endpoint.password));
+    }
+    request = request.header(reqwest::header::ACCEPT_ENCODING, "identity");
+    let response = request
+        .send()
+        .and_then(reqwest::blocking::Response::error_for_status)
+        .map_err(|error| RepositoryError::Transfer(format!("{remote}: {error}")))?;
+    if response.content_length().is_some_and(|size| size > entry.size) {
+        return Err(RepositoryError::TooLarge);
+    }
+    let bytes = response
+        .bytes()
+        .map_err(|error| RepositoryError::Transfer(format!("{remote}: {error}")))?;
+    if bytes.len() as u64 != entry.size {
+        return Err(RepositoryError::Transfer(format!(
+            "{remote}: expected {} bytes, received {}", entry.size, bytes.len()
+        )));
+    }
+    let mut offset = 0;
+    while offset < bytes.len() {
+        control.checkpoint()?;
+        if failed.load(Ordering::Acquire) {
+            return Err(RepositoryError::Cancelled);
+        }
+        let end = (offset + 256 * 1024).min(bytes.len());
+        file.write_all(&bytes[offset..end])
+            .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+        downloaded_bytes.fetch_add((end - offset) as u64, Ordering::AcqRel);
+        emit_download_progress(
+            downloaded_bytes, completed_files, total_bytes, total_files, &current_file,
+            progress_gate, on_progress, false,
+        )?;
+        offset = end;
+    }
+    file.flush()
+        .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    control.checkpoint()?;
+    verify_download(&target, entry)?;
+    completed_files.fetch_add(1, Ordering::AcqRel);
+    emit_download_progress(
+        downloaded_bytes, completed_files, total_bytes, total_files, &current_file,
+        progress_gate, on_progress, true,
+    )?;
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
