@@ -780,8 +780,10 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
         Verified,
         Hash,
     }
+    let mut cache = crate::check_cache::Cache::load(destination);
     let mut verdicts = Vec::with_capacity(selected_entries.len());
     let mut to_hash: Vec<usize> = Vec::new();
+    let mut stamps: Vec<Option<(i64, u32)>> = vec![None; selected_entries.len()];
     for (index, entry) in selected_entries.iter().enumerate() {
         let local_path = destination.join(&entry.local_path);
         verdicts.push(match std::fs::metadata(&local_path) {
@@ -792,10 +794,21 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
             Ok(metadata) if !metadata.is_file() || metadata.len() != entry.size => {
                 Verdict::Act(SyncAction::Replace)
             }
-            Ok(_) => match &entry.sha1 {
-                Some(_) => {
-                    to_hash.push(index);
-                    Verdict::Hash
+            Ok(metadata) => match &entry.sha1 {
+                Some(expected) => {
+                    let modified = crate::check_cache::modified_at(&metadata);
+                    stamps[index] = modified;
+                    let key = entry.local_path.to_string_lossy();
+                    match cache.hash_of(&key, entry.size, modified) {
+                        // Unchanged since it was last hashed, so its hash is
+                        // known; the comparison still happens.
+                        Some(known) if known == expected => Verdict::Verified,
+                        Some(_) => Verdict::Act(SyncAction::Replace),
+                        None => {
+                            to_hash.push(index);
+                            Verdict::Hash
+                        }
+                    }
                 }
                 // No published hash: only an empty file can be taken on trust.
                 None if entry.size == 0 => Verdict::Verified,
@@ -828,16 +841,15 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
             let slot = cursor.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             to_hash.get(slot).copied()
         };
-        let hash_one = |index: usize| -> Result<(usize, bool), RepositoryError> {
+        let hash_one = |index: usize| -> Result<(usize, String), RepositoryError> {
             let entry = selected_entries[index];
-            let expected = entry.sha1.as_ref().expect("only hashed entries are queued");
             let actual = sha1_file(&destination.join(&entry.local_path))?;
             hashed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             hashed_bytes.fetch_add(entry.size, std::sync::atomic::Ordering::Relaxed);
-            Ok((index, actual == *expected))
+            Ok((index, actual))
         };
 
-        let collected: Vec<Result<(usize, bool), RepositoryError>> = std::thread::scope(|scope| {
+        let collected: Vec<Result<(usize, String), RepositoryError>> = std::thread::scope(|scope| {
             let handles: Vec<_> = (1..workers)
                 .map(|_| {
                     scope.spawn(|| {
@@ -877,8 +889,16 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
         });
 
         for outcome in collected {
-            let (index, matched) = outcome?;
-            hash_matches[index] = matched;
+            let (index, actual) = outcome?;
+            let entry = selected_entries[index];
+            let expected = entry.sha1.as_ref().expect("only hashed entries are queued");
+            hash_matches[index] = actual == *expected;
+            cache.remember(
+                &entry.local_path.to_string_lossy(),
+                entry.size,
+                stamps[index],
+                actual,
+            );
         }
     }
 
@@ -916,6 +936,7 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
         }
     }
 
+    cache.save(destination);
     on_progress(CheckProgress {
         phase: CheckPhase::Verifying,
         addon: None,
@@ -1613,6 +1634,73 @@ mod sync_control_tests {
             .map(|operation| operation.relative_path.as_str())
             .collect();
         assert_eq!(paths, ["@Addon/stale.pbo", "@Addon/absent.pbo"]);
+    }
+
+    fn write_cache(scratch: &Scratch, relative: &str, sha1: &str) {
+        let full = scratch.0.join(relative);
+        let metadata = std::fs::metadata(&full).unwrap();
+        let (secs, nanos) = crate::check_cache::modified_at(&metadata).unwrap();
+        let body = format!(
+            r#"{{"files":{{"{relative}":{{"size":{},"mtime_secs":{secs},"mtime_nanos":{nanos},"sha1":"{sha1}"}}}}}}"#,
+            metadata.len()
+        );
+        std::fs::create_dir_all(scratch.0.join(".armasync")).unwrap();
+        std::fs::write(scratch.0.join(".armasync/verified-files.json"), body).unwrap();
+    }
+
+    #[test]
+    fn an_unchanged_file_is_judged_from_the_remembered_hash() {
+        let scratch = Scratch::new("memo-hit");
+        let contents = b"unchanged since the last check".to_vec();
+        scratch.write("@Addon/match.pbo", &contents);
+
+        // The file on disk matches the manifest. The memo says otherwise, and
+        // the memo is what decides — which is only true if it was consulted.
+        write_cache(&scratch, "@Addon/match.pbo", &"b".repeat(40));
+        let manifest = SyncManifest {
+            summary: crate::model::ManifestSummary {
+                directories: 1, files: 1, total_bytes: contents.len() as u64,
+                compressed_files: 0, addon_roots: 1, unhashed_files: 0,
+            },
+            entries: vec![entry_of("match.pbo", contents.len() as u64, Some(sha1_of(&contents)))],
+        };
+
+        let plan = build_sync_plan(&manifest, &["@Addon".into()], &scratch.0, &|_| {}).unwrap();
+        assert_eq!(plan.replacement_files, 1, "the remembered hash was ignored");
+        assert_eq!(plan.verified_files, 0);
+    }
+
+    #[test]
+    fn a_touched_file_is_hashed_again_rather_than_remembered() {
+        let scratch = Scratch::new("memo-miss");
+        let contents = b"unchanged since the last check".to_vec();
+        scratch.write("@Addon/match.pbo", &contents);
+        write_cache(&scratch, "@Addon/match.pbo", &"b".repeat(40));
+
+        // Same bytes, different timestamp: the memo no longer applies, so the
+        // file is read and found to be correct after all.
+        let full = scratch.0.join("@Addon/match.pbo");
+        let handle = std::fs::File::options().write(true).open(&full).unwrap();
+        let moved = std::time::SystemTime::now() + std::time::Duration::from_secs(120);
+        handle
+            .set_times(std::fs::FileTimes::new().set_modified(moved))
+            .unwrap();
+
+        let manifest = SyncManifest {
+            summary: crate::model::ManifestSummary {
+                directories: 1, files: 1, total_bytes: contents.len() as u64,
+                compressed_files: 0, addon_roots: 1, unhashed_files: 0,
+            },
+            entries: vec![entry_of("match.pbo", contents.len() as u64, Some(sha1_of(&contents)))],
+        };
+
+        let plan = build_sync_plan(&manifest, &["@Addon".into()], &scratch.0, &|_| {}).unwrap();
+        assert_eq!(plan.verified_files, 1, "a touched file must be re-read, not trusted");
+        assert_eq!(plan.replacement_files, 0);
+
+        // And the corrected hash replaces the stale one for next time.
+        let saved = std::fs::read_to_string(scratch.0.join(".armasync/verified-files.json")).unwrap();
+        assert!(saved.contains(&sha1_of(&contents)), "the memo was not updated");
     }
 
     #[test]

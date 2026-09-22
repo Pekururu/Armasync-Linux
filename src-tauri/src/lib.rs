@@ -1,4 +1,5 @@
 mod addon_groups;
+mod check_cache;
 mod diagnostics;
 mod dlc;
 mod game_launch;

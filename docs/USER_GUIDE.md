@@ -68,7 +68,9 @@ This is how you get your unit's mods. Ask your unit for their
 4. Pick **all addons** or a specific **modset**, then create an addon group
    from it (or update the group it created last time).
 5. **Check files** — Armasync compares your disk against the repository,
-   showing progress as it goes. Every addon then carries a mark: a tick if it
+   showing progress as it goes. The first check on a large repository reads
+   every file; later ones only re-read what has changed since, so they are
+   much faster. Every addon then carries a mark: a tick if it
    matches, a warning if files have changed, a cross if files are missing.
 6. **Synchronize** to download, with speed and remaining time shown as it
    runs. You can **pause**, **resume**, or **stop**; stopping cleans up partial

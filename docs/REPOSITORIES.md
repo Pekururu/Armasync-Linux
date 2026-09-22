@@ -54,6 +54,13 @@ longer published, and appends newly published members.
 - FTP credentials found inside the downloaded auto-config remain in memory only.
 - Remote path components are validated against traversal and absolute paths.
 - File checks compare expected size and SHA-1 when the manifest provides one.
+- Hashing runs across up to eight threads; beyond that read bandwidth, not the
+  CPU, is the limit.
+- A file's SHA-1 is remembered in `<destination>/.armasync/verified-files.json`
+  against its size and modification time, so an untouched file is not read
+  again on the next check. The remembered hash is still compared against the
+  repository's on every check — only the reading is skipped. Touch a file, and
+  it is hashed again. Delete that file to force a full re-read.
 - Downloads are staged on the destination filesystem and verified before install.
 - Replaced files are not backed up. The repository is the source of truth, so
   any file it replaced can be fetched again by checking and synchronizing.
