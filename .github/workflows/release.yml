@@ -44,7 +44,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v5
         with:
-          node-version-file: mise.toml
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install Rust

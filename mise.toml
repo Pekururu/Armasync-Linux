@@ -1,5 +1,5 @@
-# The Node version for this project. Read by mise locally and by CI, so both
-# always build on the same one. pnpm's version lives in package.json instead,
-# where the release workflow already reads it.
-[tools]
-node = "26.8.2"
+# The Node version lives in .node-version, which CI reads too, so the number
+# is written down once. mise ignores that file unless the tool is listed here.
+# pnpm's version lives in package.json, where the workflows already read it.
+[settings]
+idiomatic_version_file_enable_tools = ["node"]
