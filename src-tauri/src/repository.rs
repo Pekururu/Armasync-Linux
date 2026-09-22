@@ -762,10 +762,6 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
     let total_bytes = selected_entries
         .iter()
         .fold(0u64, |sum, entry| sum.saturating_add(entry.size));
-    let mut checked_bytes = 0u64;
-    // Hashing dominates this loop, so report on a timer rather than per file:
-    // a repository can hold a hundred thousand of them.
-    let mut last_report = std::time::Instant::now();
     on_progress(CheckProgress {
         phase: CheckPhase::Verifying,
         addon: None,
@@ -775,31 +771,129 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
         total_bytes,
     });
 
-    for entry in selected_entries {
-        plan.total_files += 1;
-        plan.final_bytes = plan.final_bytes.saturating_add(entry.size);
+    // Deciding what to do with a file is cheap; hashing it is not. Settle every
+    // cheap case first, then hash what is left across several threads. The rules
+    // below must stay identical to the sequential form they replaced — a file
+    // judged verified here is a file the sync will not re-download.
+    enum Verdict {
+        Act(SyncAction),
+        Verified,
+        Hash,
+    }
+    let mut verdicts = Vec::with_capacity(selected_entries.len());
+    let mut to_hash: Vec<usize> = Vec::new();
+    for (index, entry) in selected_entries.iter().enumerate() {
         let local_path = destination.join(&entry.local_path);
-        let action = match std::fs::metadata(&local_path) {
+        verdicts.push(match std::fs::metadata(&local_path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Some(SyncAction::Download)
+                Verdict::Act(SyncAction::Download)
             }
             Err(error) => return Err(RepositoryError::Local(error.to_string())),
             Ok(metadata) if !metadata.is_file() || metadata.len() != entry.size => {
-                Some(SyncAction::Replace)
+                Verdict::Act(SyncAction::Replace)
             }
-            Ok(_) => {
-                let matches = match &entry.sha1 {
-                    Some(expected) => sha1_file(&local_path)? == *expected,
-                    None => entry.size == 0,
-                };
-                if matches {
-                    plan.verified_files += 1;
-                    None
-                } else {
-                    Some(SyncAction::Replace)
+            Ok(_) => match &entry.sha1 {
+                Some(_) => {
+                    to_hash.push(index);
+                    Verdict::Hash
+                }
+                // No published hash: only an empty file can be taken on trust.
+                None if entry.size == 0 => Verdict::Verified,
+                None => Verdict::Act(SyncAction::Replace),
+            },
+        });
+    }
+
+    let settled = total_files - to_hash.len();
+    let mut hash_matches: Vec<bool> = vec![false; selected_entries.len()];
+    if !to_hash.is_empty() {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let hashed = std::sync::atomic::AtomicUsize::new(0);
+        let hashed_bytes = std::sync::atomic::AtomicU64::new(0);
+        let settled_bytes = selected_entries
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !matches!(verdicts[*index], Verdict::Hash))
+            .fold(0u64, |sum, (_, entry)| sum.saturating_add(entry.size));
+
+        // Reading is the limit once hashing is spread out, so more threads than
+        // this buys nothing and costs seeks on a spinning disk.
+        let workers = std::thread::available_parallelism()
+            .map(|value| value.get())
+            .unwrap_or(4)
+            .min(8)
+            .min(to_hash.len());
+
+        let take_next = || -> Option<usize> {
+            let slot = cursor.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            to_hash.get(slot).copied()
+        };
+        let hash_one = |index: usize| -> Result<(usize, bool), RepositoryError> {
+            let entry = selected_entries[index];
+            let expected = entry.sha1.as_ref().expect("only hashed entries are queued");
+            let actual = sha1_file(&destination.join(&entry.local_path))?;
+            hashed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            hashed_bytes.fetch_add(entry.size, std::sync::atomic::Ordering::Relaxed);
+            Ok((index, actual == *expected))
+        };
+
+        let collected: Vec<Result<(usize, bool), RepositoryError>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (1..workers)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut local = Vec::new();
+                        while let Some(index) = take_next() {
+                            local.push(hash_one(index));
+                        }
+                        local
+                    })
+                })
+                .collect();
+
+            // This thread hashes too, and is the only one that reports, so the
+            // callback never has to be shared across threads.
+            let mut mine = Vec::new();
+            let mut last_report = std::time::Instant::now();
+            while let Some(index) = take_next() {
+                mine.push(hash_one(index));
+                if last_report.elapsed() >= REPORT_INTERVAL {
+                    last_report = std::time::Instant::now();
+                    let done = hashed.load(std::sync::atomic::Ordering::Relaxed);
+                    on_progress(CheckProgress {
+                        phase: CheckPhase::Verifying,
+                        addon: Some(selected_entries[index].addon_name.clone()),
+                        checked_files: settled + done,
+                        total_files,
+                        checked_bytes: settled_bytes
+                            .saturating_add(hashed_bytes.load(std::sync::atomic::Ordering::Relaxed)),
+                        total_bytes,
+                    });
                 }
             }
+            for handle in handles {
+                mine.extend(handle.join().unwrap_or_default());
+            }
+            mine
+        });
+
+        for outcome in collected {
+            let (index, matched) = outcome?;
+            hash_matches[index] = matched;
+        }
+    }
+
+    for (index, entry) in selected_entries.iter().enumerate() {
+        plan.total_files += 1;
+        plan.final_bytes = plan.final_bytes.saturating_add(entry.size);
+        let action = match &verdicts[index] {
+            Verdict::Act(action) => Some(action.clone()),
+            Verdict::Verified => None,
+            Verdict::Hash if hash_matches[index] => None,
+            Verdict::Hash => Some(SyncAction::Replace),
         };
+        if action.is_none() {
+            plan.verified_files += 1;
+        }
 
         if let Some(action) = action {
             let transfer_bytes = if entry.compressed && entry.compressed_size > 0 {
@@ -820,20 +914,17 @@ fn build_sync_plan<F: Fn(CheckProgress)>(
                 final_bytes: entry.size,
             });
         }
-
-        checked_bytes = checked_bytes.saturating_add(entry.size);
-        if last_report.elapsed() >= REPORT_INTERVAL || plan.total_files == total_files {
-            last_report = std::time::Instant::now();
-            on_progress(CheckProgress {
-                phase: CheckPhase::Verifying,
-                addon: Some(entry.addon_name.clone()),
-                checked_files: plan.total_files,
-                total_files,
-                checked_bytes,
-                total_bytes,
-            });
-        }
     }
+
+    on_progress(CheckProgress {
+        phase: CheckPhase::Verifying,
+        addon: None,
+        checked_files: total_files,
+        total_files,
+        checked_bytes: total_bytes,
+        total_bytes,
+    });
+
     Ok(plan)
 }
 
@@ -1319,8 +1410,9 @@ fn long_field(object: &ObjectData, name: &str) -> Result<u64, RepositoryError> {
 #[cfg(test)]
 mod sync_control_tests {
     use super::{
-        AddonContext, MAX_PARALLEL_DOWNLOADS, ManifestEntry, RepositoryError, SyncControl,
-        SyncCoordinator, SyncManifest, build_sync_plan, download_worker_count, should_start_addon,
+        AddonContext, Digest, MAX_PARALLEL_DOWNLOADS, ManifestEntry, RepositoryError, Sha1,
+        SyncControl, SyncCoordinator, SyncManifest, build_sync_plan, download_worker_count,
+        should_start_addon,
     };
     use crate::model::ManifestSummary;
     use std::path::PathBuf;
@@ -1426,6 +1518,101 @@ mod sync_control_tests {
             },
             entries,
         }
+    }
+
+    /// Removes its directory on drop, so a failing assertion cannot leave a
+    /// scratch tree behind. There is no tempfile dependency in this crate.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "armasync-{tag}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).unwrap();
+            Scratch(path)
+        }
+
+        fn write(&self, relative: &str, contents: &[u8]) {
+            let full = self.0.join(relative);
+            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+            std::fs::write(full, contents).unwrap();
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn sha1_of(contents: &[u8]) -> String {
+        let mut digest = Sha1::new();
+        digest.update(contents);
+        format!("{:x}", digest.finalize())
+    }
+
+    fn entry_of(name: &str, size: u64, sha1: Option<String>) -> ManifestEntry {
+        ManifestEntry {
+            remote_path: PathBuf::from(format!("@Addon/{name}")),
+            local_path: PathBuf::from(format!("@Addon/{name}")),
+            addon_name: "@Addon".into(),
+            addon_remote_root: PathBuf::from("@Addon"),
+            size,
+            compressed_size: 0,
+            sha1,
+            compressed: false,
+        }
+    }
+
+    #[test]
+    fn hashing_in_parallel_reaches_the_same_verdicts_as_checking_one_by_one() {
+        let scratch = Scratch::new("verdicts");
+        let good = b"identical on both sides".to_vec();
+        let local = b"same length, different!".to_vec();
+        let remote = b"same length, DIFFERENT?".to_vec();
+        assert_eq!(local.len(), remote.len(), "the stale case must survive the size check");
+
+        scratch.write("@Addon/match.pbo", &good);
+        scratch.write("@Addon/stale.pbo", &local);
+        scratch.write("@Addon/empty.pbo", b"");
+        // @Addon/absent.pbo is deliberately not written.
+
+        let entries = vec![
+            entry_of("match.pbo", good.len() as u64, Some(sha1_of(&good))),
+            entry_of("stale.pbo", remote.len() as u64, Some(sha1_of(&remote))),
+            entry_of("absent.pbo", 12, Some(sha1_of(b"anything"))),
+            entry_of("empty.pbo", 0, None),
+        ];
+        let manifest = SyncManifest {
+            summary: crate::model::ManifestSummary {
+                directories: 1,
+                files: entries.len(),
+                total_bytes: entries.iter().map(|entry| entry.size).sum(),
+                compressed_files: 0,
+                addon_roots: 1,
+                unhashed_files: 1,
+            },
+            entries,
+        };
+
+        let plan = build_sync_plan(&manifest, &["@Addon".into()], &scratch.0, &|_| {}).unwrap();
+
+        assert_eq!(plan.total_files, 4);
+        assert_eq!(plan.verified_files, 2, "matching hash and empty unhashed file");
+        assert_eq!(plan.download_files, 1, "the file that is not there");
+        assert_eq!(plan.replacement_files, 1, "same size, different content");
+
+        // Order must follow the manifest, not the order hashing happened to finish.
+        let paths: Vec<&str> = plan
+            .operations
+            .iter()
+            .map(|operation| operation.relative_path.as_str())
+            .collect();
+        assert_eq!(paths, ["@Addon/stale.pbo", "@Addon/absent.pbo"]);
     }
 
     #[test]
