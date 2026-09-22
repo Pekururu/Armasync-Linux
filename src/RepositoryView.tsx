@@ -252,8 +252,6 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
 
   async function synchronize() {
     if (!selectedId || summary.transferFiles === 0) return;
-    const approved = await confirm(`Download ${summary.transferFiles} files (${bytes(summary.downloadBytes)}) to ${selectedRepository?.destination}?`, { title: "Synchronize repository", kind: "warning" });
-    if (!approved) return;
     const jobId = crypto.randomUUID();
     const progress = new Channel<SyncProgress>();
     progress.onmessage = (update) => setSyncProgress((current) => update.totalBytes ? update : {

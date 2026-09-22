@@ -11,7 +11,9 @@ copying its crowded nested-tab layout:
 6. Check local files explicitly, with live progress while hashing.
 7. Review verified, missing, and replacement counts, and the per-addon state
    marked on every row.
-8. Synchronize explicitly after a native confirmation dialog.
+8. Synchronize explicitly. There is no confirmation dialog: the file counts,
+   transfer size, and download location are already on screen beside the
+   button, and a transfer can be paused or stopped while it runs.
 
 Checking reports its phase, file counts, and the addon being verified through a
 Tauri channel, on a 120 ms timer — a repository can hold a hundred thousand
