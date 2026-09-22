@@ -8,7 +8,6 @@ type RadioPlugin = { id: string; label: string; modDirectory: string | null; plu
 type VoiceStatus = {
   gameDirectory: string | null; prefixDirectory: string | null; prefixInitialized: boolean;
   protontricksAvailable: boolean; protontricksLaunchAvailable: boolean; pipewireAvailable: boolean;
-  audioInput: string | null; audioOutput: string | null;
   teamspeakExecutable: string | null; teamspeakInstalled: boolean; teamspeakRunning: boolean;
   pluginDirectory: string | null; cbaDirectory: string | null;
   radioPlugins: RadioPlugin[];
@@ -20,13 +19,12 @@ type InstallerResult = { processId: number; backupArchive: string; installer: st
 type PluginResult = { destination: string; backup: string | null };
 type VoiceAction = "runtime" | "install" | "plugin" | "refresh" | "theme";
 
-function VIcon({ name }: { name: "voice" | "check" | "warning" | "refresh" | "play" | "download" | "link" | "audio" | "folder" | "tools" }) {
+function VIcon({ name }: { name: "check" | "warning" | "refresh" | "play" | "download" | "folder" | "tools" }) {
   const paths = {
-    voice: <><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></>,
     check: <path d="m5 12 4 4L19 6"/>, warning: <><path d="m12 3 9 17H3z"/><path d="M12 9v4m0 3h.01"/></>,
     refresh: <><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></>, play: <path d="m8 5 11 7-11 7z"/>,
-    download: <><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></>, link: <><path d="M10 13a4 4 0 0 0 5.7.1l2.4-2.4A4 4 0 0 0 12.4 5L11 6.4"/><path d="M14 11a4 4 0 0 0-5.7-.1l-2.4 2.4A4 4 0 0 0 11.6 19l1.4-1.4"/></>,
-    audio: <><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></>, folder: <path d="M3 7.5h7l2-2h9v13H3z"/>,
+    download: <><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></>,
+    folder: <path d="M3 7.5h7l2-2h9v13H3z"/>,
     tools: <><path d="m14 6 4-2 2 2-2 4-3 1-5 9-3-2 5-8z"/><path d="m5 5 4 4"/></>,
   };
   return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
@@ -99,17 +97,6 @@ export default function VoiceView({ active }: { active: boolean }) {
     finally { setBusy(null); }
   }
 
-  async function installPlugin() {
-    setBusy("plugin"); setError(null); setNotice(null);
-    try {
-      const results = await invoke<Array<{ id: string; label: string; destination: string; backup: string | null }>>("install_radio_plugins");
-      const labels = results.map((item) => item.label).join(" and ");
-      const backedUp = results.some((item) => item.backup);
-      setNotice(`${labels} connected to TeamSpeak.${backedUp ? " Previous plugins were safely backed up." : ""}`);
-      await refresh();
-    } catch (cause) { setError(String(cause)); }
-    finally { setBusy(null); }
-  }
 
   async function changeDarkTheme(remove = false) {
     setBusy("theme"); setError(null); setNotice(null);
@@ -125,9 +112,6 @@ export default function VoiceView({ active }: { active: boolean }) {
 
   const runtimesReady = status?.runtimeComponents.every((item) => item.installed) ?? false;
   const toolsReady = !!status?.protontricksAvailable && !!status?.protontricksLaunchAvailable;
-  const detectedRadios = status?.radioPlugins.filter((radio) => radio.modDirectory) ?? [];
-  const pendingRadios = detectedRadios.filter((radio) => !radio.pluginInstalled);
-  const bridgeReady = detectedRadios.length > 0 && pendingRadios.length === 0 && !!status?.cbaDirectory;
 
   return <section className={`workspace voice-workspace ${active ? "" : "tab-hidden"}`}>
     <div className="workspace-heading"><div><h1>Voice</h1><p>Set up TeamSpeak and ACRE for Arma, then start voice from the launch bar.</p></div><div className="heading-actions"><span className={`voice-live ${status?.teamspeakRunning ? "online" : ""}`}>{status?.teamspeakRunning ? "TeamSpeak running" : "TeamSpeak off"}</span><button className="button quiet" type="button" disabled={busy !== null} onClick={() => void refresh()}><VIcon name="refresh"/> {busy === "refresh" ? "Checking…" : "Refresh"}</button></div></div>
@@ -136,7 +120,7 @@ export default function VoiceView({ active }: { active: boolean }) {
 
     <div className="voice-simple-layout">
       <section className="voice-setup-list">
-        <header><div><h2>Get voice working</h2><span>{status?.ready ? "TeamSpeak and ACRE are connected — you're set." : "Three steps; the launcher handles the technical details."}</span></div><span className={`voice-progress ${status?.ready ? "ok" : ""}`}>{status?.ready ? "Ready" : `${[runtimesReady, !!status?.teamspeakInstalled, bridgeReady].filter(Boolean).length} of 3`}</span></header>
+        <header><div><h2>Get voice working</h2><span>{status?.ready ? "TeamSpeak and ACRE are connected — you're set." : "Two steps; the launcher handles the technical details."}</span></div><span className={`voice-progress ${status?.ready ? "ok" : ""}`}>{status?.ready ? "Ready" : `${[runtimesReady, !!status?.teamspeakInstalled].filter(Boolean).length} of 2`}</span></header>
 
         <article>
           <span className={`step-number ${runtimesReady ? "ok" : ""}`}>{runtimesReady ? <VIcon name="check"/> : "1"}</span><div><h3>Prepare compatibility</h3><p>{runtimesReady ? "Everything TeamSpeak needs is installed." : !status?.prefixInitialized ? "Launch Arma once before continuing." : !toolsReady ? "Missing host packages — see “Before you start” above." : "Install the required compatibility files."}</p></div><button className="button" type="button" disabled={!status?.prefixInitialized || !toolsReady || busy !== null || runtimesReady} onClick={() => void prepareRuntime()}><VIcon name="tools"/>{busy === "runtime" ? "Preparing…" : runtimesReady ? "Done" : "Prepare"}</button>
@@ -146,15 +130,10 @@ export default function VoiceView({ active }: { active: boolean }) {
           <span className={`step-number ${status?.teamspeakInstalled ? "ok" : ""}`}>{status?.teamspeakInstalled ? <VIcon name="check"/> : "2"}</span><div><h3>Install TeamSpeak 3</h3><p>{status?.teamspeakInstalled ? "TeamSpeak is installed and ready to launch." : "The launcher will open the official installer for you."}</p></div><button className="button" type="button" disabled={!status?.prefixInitialized || !status?.protontricksLaunchAvailable || busy !== null} onClick={() => void installTeamSpeak()}><VIcon name="download"/>{busy === "install" ? "Opening…" : status?.teamspeakInstalled ? "Reinstall" : "Install"}</button>
         </article>
 
-        <article>
-          <span className={`step-number ${bridgeReady ? "ok" : ""}`}>{bridgeReady ? <VIcon name="check"/> : "3"}</span><div><h3>Connect radio plugin</h3><p>{bridgeReady ? `Connected to TeamSpeak: ${detectedRadios.filter((radio) => radio.pluginInstalled).map((radio) => radio.label).join(", ")}.` : detectedRadios.length === 0 ? "Install ACRE2 or TFAR from your repository first." : !status?.cbaDirectory ? "Install CBA_A3 from your repository first." : status?.teamspeakRunning ? "Close TeamSpeak to install the radio plugins." : `Install the ${pendingRadios.map((radio) => radio.label).join(" and ")} plugin into TeamSpeak.`}</p></div><button className="button" type="button" disabled={!status?.teamspeakInstalled || detectedRadios.every((radio) => !radio.pluginSource) || !status?.cbaDirectory || !!status?.teamspeakRunning || busy !== null} onClick={() => void installPlugin()}><VIcon name="link"/>{busy === "plugin" ? "Connecting…" : bridgeReady ? "Update" : "Connect"}</button>
-        </article>
-
         {(notice || error || (runtimeResult && !runtimeResult.success)) && <div className="voice-simple-output">{notice && <p className="operation-notice">{notice}</p>}{error && <p className="operation-error">{error}</p>}{runtimeResult && !runtimeResult.success && <div className="runtime-results">{runtimeResult.components.filter((item) => !item.success).map((item) => <div key={item.id}><StateMark ok={false}/><span><strong>Compatibility setup failed</strong><small>{item.detail}</small></span></div>)}<button type="button" onClick={() => void openPath(runtimeResult.logFile)}><VIcon name="folder"/> Open diagnostic log</button></div>}</div>}
       </section>
 
       <div className="voice-extras">
-        <section className="voice-audio-card"><span className="eyebrow">Audio devices</span><div><VIcon name="audio"/><span><strong>{status?.audioInput ?? "No microphone detected"}</strong><small>Microphone</small></span></div><div><VIcon name="voice"/><span><strong>{status?.audioOutput ?? "No output detected"}</strong><small>Output</small></span></div></section>
         <section className="voice-theme-card"><div className="theme-card-heading"><div><span className="eyebrow">Optional appearance</span><h2>Armasync Dark</h2></div><span className="theme-swatches"><i/><i/><i/></span></div><p>A restrained dark skin matching this launcher. It changes colors only.</p>{status?.darkThemeInstalled ? <div className="theme-installed"><span><StateMark ok/><small>Installed</small></span><button type="button" disabled={busy !== null} onClick={() => void changeDarkTheme(true)}>Remove</button></div> : <button className="button" type="button" disabled={!status?.teamspeakInstalled || busy !== null} onClick={() => void changeDarkTheme()}>{busy === "theme" ? "Installing…" : "Install dark theme"}</button>}</section>
         <section><span className="eyebrow">One-time TeamSpeak settings</span><ol><li><span>1</span><p>Disable <strong>Gamepad and Joystick Hotkey Support</strong>.</p></li><li><span>2</span><p>Make sure the <strong>ACRE2 plugin</strong> is enabled.</p></li><li><span>3</span><p>Choose your microphone and output if TeamSpeak picked the wrong ones.</p></li></ol></section>
       </div>

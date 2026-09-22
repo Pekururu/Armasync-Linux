@@ -207,11 +207,6 @@ async fn install_teamspeak() -> Result<model::InstallerLaunchResult, String> {
 }
 
 #[tauri::command]
-fn install_radio_plugins() -> Result<Vec<model::RadioInstallResult>, String> {
-    voice::install_radio_plugins()
-}
-
-#[tauri::command]
 fn launch_teamspeak() -> Result<model::ProcessLaunchResult, String> {
     voice::launch_teamspeak()
 }
@@ -347,7 +342,6 @@ pub fn run() {
             get_voice_status,
             prepare_voice_runtime,
             install_teamspeak,
-            install_radio_plugins,
             launch_teamspeak,
             get_teamspeak_running,
             install_teamspeak_dark_theme,

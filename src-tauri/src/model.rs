@@ -193,15 +193,6 @@ pub struct RadioPluginStatus {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RadioInstallResult {
-    pub id: String,
-    pub label: String,
-    pub destination: String,
-    pub backup: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProcessLaunchResult {
     pub process_id: u32,
     pub log_file: String,

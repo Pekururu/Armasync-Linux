@@ -83,7 +83,7 @@ Arma units use radio mods — **ACRE2** or **TFAR** — that connect the game
 to a Windows TeamSpeak 3 client. Armasync installs that client inside
 Arma's own Proton prefix and wires the plugin up for you.
 
-The **Get voice working** card has three steps, in order:
+The **Get voice working** card has two steps, in order:
 
 1. **Prepare compatibility** — installs the Windows components TeamSpeak
    needs into Arma's Proton prefix. A backup of the prefix is created
@@ -91,25 +91,23 @@ The **Get voice working** card has three steps, in order:
 2. **Install TeamSpeak 3** — downloads the official TeamSpeak 3 installer
    and runs it. In the installer, keep the defaults (install for all
    users, default path).
-3. **Connect radio plugin** — finds ACRE2 and/or TFAR among your installed
-   addons and installs the matching TeamSpeak plugin. Both radios can be
-   installed side by side; the mission's mods decide which one is active.
+The radio plugin itself needs no step here: Arma installs the ACRE2 or TFAR
+TeamSpeak plugin the first time you launch the game with that addon enabled.
+Armasync reports whether it has appeared, under **Before you start**.
 
 One-time TeamSpeak settings after the first start: disable **Gamepad and
 Joystick Hotkey Support** when prompted, and check that the plugin is
 enabled under Tools → Options → Addons.
 
-Below the setup card you'll find your detected microphone and output
-device, and **Armasync Dark** — an optional dark color theme for TeamSpeak.
-Select it in TeamSpeak under Tools → Options → Design after installing.
+Below the setup card you'll find **Armasync Dark** — an optional dark color
+theme for TeamSpeak. Select it in TeamSpeak under Tools → Options → Design
+after installing.
 
 On game day: press **TeamSpeak** in the bottom bar, connect to your unit's
 TeamSpeak server, then press **Launch game**.
 
 ## Configuration
 
-- **Display** — windowed, borderless, or leave it to Arma's own setting
-  (recommended).
 - **Startup** — skip splash screens and intro, and optional performance
   settings. The defaults are sensible; only change performance options if
   you know your hardware wants them.

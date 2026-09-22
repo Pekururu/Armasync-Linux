@@ -641,11 +641,6 @@ select:focus { border-color: var(--accent); }
 .voice-setup-list > article .button { min-width: 104px; justify-content: center; }
 .voice-simple-output { padding: 10px 14px; background: var(--strip); }
 .voice-simple-output .operation-notice, .voice-simple-output .operation-error { margin: 0; }
-.voice-audio-card > div { display: grid; grid-template-columns: 23px minmax(0,1fr); align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid transparent; }
-.voice-audio-card > div > .icon { color: #779cc1; }
-.voice-audio-card strong, .voice-audio-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.voice-audio-card strong { font-size: 11px; font-weight: 600; }
-.voice-audio-card small { margin-top: 3px; color: var(--subtle); font-size: 11px; }
 .theme-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
 .theme-card-heading h2 { margin-top: 5px; }
 .theme-swatches { display: flex; gap: 3px; }
@@ -827,7 +822,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .conditional-repair p,
 .voice-setup-list > header > span,
 .voice-setup-list > article p,
-.voice-audio-card small,
 .voice-theme-card > p,
 .theme-installed small,
 .voice-extras li p,
@@ -869,7 +863,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .trouble-maintenance summary strong,
 .conditional-repair strong,
 .voice-setup-list > article h3,
-.voice-audio-card strong,
 .runtime-results strong,
 .runtime-results button { font-size: var(--font-small); }
 

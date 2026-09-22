@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 use crate::model::{
-    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult, RadioInstallResult,
+    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult,
     RadioPluginStatus, RuntimeComponentResult, RuntimeSetupResult, VoiceRuntimeComponent,
     VoiceStatus,
 };
@@ -164,7 +164,10 @@ pub fn status() -> VoiceStatus {
     }
     for radio in &detected_radios {
         if radio.plugin_source.is_some() && !radio.plugin_installed {
-            notes.push(format!("Install the {} 64-bit TeamSpeak plugin.", radio.label));
+            notes.push(format!(
+                "Launch Arma once with {} enabled; it installs its own TeamSpeak plugin.",
+                radio.label
+            ));
         } else if radio.plugin_source.is_none() {
             notes.push(format!(
                 "{} was found, but no 64-bit TeamSpeak plugin file exists inside its mod folder.",
@@ -372,59 +375,6 @@ pub async fn install_teamspeak() -> Result<InstallerLaunchResult, String> {
         installer: path_string(installer),
         log_file: path_string(log),
     })
-}
-
-/// Installs the TeamSpeak plugin for every detected radio mod. Installing
-/// all of them keeps the client compatible with both ACRE and TFAR missions.
-pub fn install_radio_plugins() -> Result<Vec<RadioInstallResult>, String> {
-    let current = status();
-    if current.teamspeak_running {
-        return Err("Exit TeamSpeak completely before replacing its radio plugins".into());
-    }
-    if current.cba_directory.is_none() {
-        return Err("CBA_A3 was not found; ACRE2 and TFAR require it".into());
-    }
-    if !current.teamspeak_installed {
-        return Err("TeamSpeak 3 is not installed for all users in Arma's prefix".into());
-    }
-    let mut results = Vec::new();
-    for radio in current
-        .radio_plugins
-        .iter()
-        .filter(|radio| radio.mod_directory.is_some())
-    {
-        let (Some(source), Some(destination)) = (
-            radio.plugin_source.as_deref().map(PathBuf::from),
-            radio.plugin_destination.as_deref().map(PathBuf::from),
-        ) else {
-            continue;
-        };
-        let parent = destination
-            .parent()
-            .ok_or_else(|| "invalid TeamSpeak plugin path".to_owned())?;
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        let backup = if destination.exists() {
-            let path = destination.with_extension(format!("dll.backup-{}", timestamp()?));
-            fs::copy(&destination, &path).map_err(|error| error.to_string())?;
-            Some(path)
-        } else {
-            None
-        };
-        fs::copy(&source, &destination).map_err(|error| error.to_string())?;
-        results.push(RadioInstallResult {
-            id: radio.id.clone(),
-            label: radio.label.clone(),
-            destination: path_string(destination),
-            backup: display(backup),
-        });
-    }
-    if results.is_empty() {
-        return Err(
-            "No installable radio plugin was found — install ACRE2 or TFAR from your repository first"
-                .into(),
-        );
-    }
-    Ok(results)
 }
 
 pub fn launch_teamspeak() -> Result<ProcessLaunchResult, String> {
@@ -669,6 +619,8 @@ fn valid_pe_installer(path: &Path) -> bool {
             .is_ok_and(|metadata| metadata.len() > 1024 * 1024)
 }
 
+/// Reported by the Troubleshooting tab's audio check; the Voice tab no longer
+/// shows this, since the user already knows which devices they use.
 fn pipewire_device(target: &str) -> Option<String> {
     let output = crate::process::host_command("wpctl")
         .args(["inspect", target])
