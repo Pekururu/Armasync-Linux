@@ -1,0 +1,5 @@
+# The Node version for this project. Read by mise locally and by CI, so both
+# always build on the same one. pnpm's version lives in package.json instead,
+# where the release workflow already reads it.
+[tools]
+node = "26.8.2"
