@@ -63,8 +63,8 @@ network and storage, especially for repositories containing many small files.
 
 Synchronization now uses a bounded pool of up to eight persistent FTP
 connections, schedules larger files first, and relies on normal buffered writes
-before SHA-1 verification. Pause, stop, staging, verification, backups, and
-installation rollback still apply across the worker pool.
+before SHA-1 verification. Pause, stop, staging, and verification still apply
+across the worker pool.
 
 ## Launch selectors and TeamSpeak status appeared stale
 

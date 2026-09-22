@@ -10,7 +10,7 @@ type RepositoryAddon = { id: string; name: string; remotePath: string; files: nu
 type RepositorySnapshot = { repository: RepositoryInfo; manifest: ManifestSummary; publishedModsets: PublishedModset[]; addons: RepositoryAddon[] };
 type SyncOperation = { action: "download" | "replace"; addon: string; relativePath: string; transferBytes: number; finalBytes: number };
 type SyncPlan = { requestedAddons: string[]; resolvedAddons: string[]; missingAddons: string[]; ambiguousAddons: string[]; totalFiles: number; verifiedFiles: number; downloadFiles: number; replacementFiles: number; downloadBytes: number; finalBytes: number; operations: SyncOperation[] };
-type SyncResult = { installedFiles: number; downloadedBytes: number; backupDirectory: string | null; destination: string };
+type SyncResult = { installedFiles: number; downloadedBytes: number; destination: string };
 type CheckProgress = { phase: "metadata" | "verifying"; addon: string | null; checkedFiles: number; totalFiles: number; checkedBytes: number; totalBytes: number };
 type AddonState = "ok" | "changed" | "missing" | "unresolved";
 type AddonCheck = { state: AddonState; missing: number; changed: number; transferBytes: number };
@@ -252,7 +252,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
 
   async function synchronize() {
     if (!selectedId || summary.transferFiles === 0) return;
-    const approved = await confirm(`Download ${summary.transferFiles} files (${bytes(summary.downloadBytes)}) to ${selectedRepository?.destination}? Existing replacements are backed up first.`, { title: "Synchronize repository", kind: "warning" });
+    const approved = await confirm(`Download ${summary.transferFiles} files (${bytes(summary.downloadBytes)}) to ${selectedRepository?.destination}?`, { title: "Synchronize repository", kind: "warning" });
     if (!approved) return;
     const jobId = crypto.randomUUID();
     const progress = new Channel<SyncProgress>();
@@ -350,7 +350,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
               <div className="check-bar">
                 <div className="check-state">
                   <span className="eyebrow">Local file check</span>
-                  {result ? <div className="transfer-outcome success"><span className="outcome-mark"><RepoIcon name="check"/></span><div><strong>Synchronization complete</strong><small>{result.installedFiles.toLocaleString()} files installed · {bytes(result.downloadedBytes)} downloaded.{result.backupDirectory ? " Replaced files were backed up." : ""}</small></div></div>
+                  {result ? <div className="transfer-outcome success"><span className="outcome-mark"><RepoIcon name="check"/></span><div><strong>Synchronization complete</strong><small>{result.installedFiles.toLocaleString()} files installed · {bytes(result.downloadedBytes)} downloaded.</small></div></div>
                     : error ? <div className="transfer-outcome failure"><span className="outcome-mark"><RepoIcon name="missing"/></span><div><strong>Check failed</strong><small className="repository-error">{error}</small></div></div>
                     : hasCheckedSelection ? <><div className="check-summary"><span><strong>{summary.verifiedFiles.toLocaleString()}</strong> verified</span><span><strong>{summary.downloadFiles.toLocaleString()}</strong> missing</span><span><strong>{summary.replacementFiles.toLocaleString()}</strong> changed</span><span><strong>{bytes(summary.downloadBytes)}</strong> transfer</span></div>{summary.unresolved.length > 0 && <p className="repository-warning">{summary.unresolved.length} selected addon{summary.unresolved.length === 1 ? "" : "s"} could not be resolved safely.</p>}{pendingAddons.length > 0 && <p className="check-pending">{pendingAddons.length} newly selected addon{pendingAddons.length === 1 ? "" : "s"} not checked yet.</p>}</>
                     : <p>Compare selected repository files with the destination using size and SHA-1 hashes.</p>}

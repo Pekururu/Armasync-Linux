@@ -861,7 +861,6 @@ where
         return Ok(SyncResult {
             installed_files: 0,
             downloaded_bytes: 0,
-            backup_directory: None,
             destination: destination.to_string_lossy().into_owned(),
         });
     }
@@ -907,7 +906,6 @@ where
     let run_id = format!("{stamp}-{}", std::process::id());
     let state_root = destination.join(".armasync");
     let staging_root = state_root.join("staging").join(&run_id);
-    let backup_root = state_root.join("backups").join(&run_id);
     std::fs::create_dir_all(&staging_root)
         .map_err(|error| RepositoryError::Sync(error.to_string()))?;
 
@@ -924,7 +922,6 @@ where
         return Err(error);
     }
 
-    let mut installed: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
     let install_result = (|| {
         on_progress(SyncProgress {
             phase: SyncPhase::Installing,
@@ -942,25 +939,8 @@ where
                 std::fs::create_dir_all(parent)
                     .map_err(|error| RepositoryError::Sync(error.to_string()))?;
             }
-            let backup = if target.exists() {
-                let backup = backup_root.join(&entry.local_path);
-                if let Some(parent) = backup.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|error| RepositoryError::Sync(error.to_string()))?;
-                }
-                std::fs::rename(&target, &backup)
-                    .map_err(|error| RepositoryError::Sync(error.to_string()))?;
-                Some(backup)
-            } else {
-                None
-            };
-            if let Err(error) = std::fs::rename(&staged_file, &target) {
-                if let Some(backup) = &backup {
-                    let _ = std::fs::rename(backup, &target);
-                }
-                return Err(RepositoryError::Sync(error.to_string()));
-            }
-            installed.push((target, backup));
+            std::fs::rename(&staged_file, &target)
+                .map_err(|error| RepositoryError::Sync(error.to_string()))?;
             on_progress(SyncProgress {
                 phase: SyncPhase::Installing,
                 downloaded_bytes: plan.download_bytes,
@@ -974,12 +954,6 @@ where
     })();
 
     if let Err(error) = install_result {
-        for (target, backup) in installed.into_iter().rev() {
-            let _ = std::fs::remove_file(&target);
-            if let Some(backup) = backup {
-                let _ = std::fs::rename(backup, target);
-            }
-        }
         let _ = std::fs::remove_dir_all(&staging_root);
         return Err(error);
     }
@@ -988,8 +962,6 @@ where
     Ok(SyncResult {
         installed_files: entries.len(),
         downloaded_bytes: plan.download_bytes,
-        backup_directory: (plan.replacement_files > 0)
-            .then(|| backup_root.to_string_lossy().into_owned()),
         destination: destination.to_string_lossy().into_owned(),
     })
 }

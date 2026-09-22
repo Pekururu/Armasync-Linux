@@ -91,7 +91,6 @@ pub enum SyncAction {
 pub struct SyncResult {
     pub installed_files: usize,
     pub downloaded_bytes: u64,
-    pub backup_directory: Option<String>,
     pub destination: String,
 }
 

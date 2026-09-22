@@ -34,7 +34,5 @@ recovery copy rather than deleting unrelated TeamSpeak configuration.
   size-limited, and checked for a Windows PE signature before execution.
 - TeamSpeak launch and installer output is retained under
   `~/.local/state/armasync/logs/`.
-- An existing ACRE plugin is copied to a timestamped backup before replacement.
-- Plugin replacement is refused while TeamSpeak is running.
 - `mfc140` is intentionally not part of normal setup. It should only be added if
   an ACRE extension error specifically reports the missing MFC/VC140 runtime.
