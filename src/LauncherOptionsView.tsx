@@ -2,10 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 
-type DisplayMode = "game_setting" | "windowed" | "borderless_window";
 export type SavedServer = { id: string; name: string; address: string; port: number; password: string | null };
 export type LauncherSettings = {
-  displayMode: DisplayMode; profile: string | null; noLauncher: boolean; noSplash: boolean;
+  profile: string | null; noLauncher: boolean; noSplash: boolean;
   skipIntro: boolean; noPause: boolean; showScriptErrors: boolean; worldEmpty: boolean;
   filePatching: boolean; checkSignatures: boolean; enableHt: boolean; hugePages: boolean;
   cpuCount: number | null; exThreads: number | null; maxMemory: number | null;
@@ -15,10 +14,10 @@ export type LauncherSettings = {
 export type LauncherEnvironment = { gameDirectory: string | null; executable: string | null; prefixDirectory: string | null; selectedProton: string | null; profiles: string[] };
 export type OptionsView = { settings: LauncherSettings; environment: LauncherEnvironment; arguments: string[]; commandPreview: string };
 
-function OIcon({ name }: { name: "save" | "reset" | "display" | "rocket" | "server" | "profile" | "advanced" | "check" }) {
+function OIcon({ name }: { name: "save" | "reset" | "rocket" | "server" | "profile" | "advanced" | "check" }) {
   const paths = {
     save: <><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></>, reset: <><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></>,
-    display: <><rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 21h8m-4-4v4"/></>, rocket: <><path d="M14 5c3-2 5-2 5-2s0 2-2 5l-5 5-4-1-1-4z"/><path d="m8 12-3 1-2 3 5-1m4-3 1 4-3 3-1-4"/></>,
+    rocket: <><path d="M14 5c3-2 5-2 5-2s0 2-2 5l-5 5-4-1-1-4z"/><path d="m8 12-3 1-2 3 5-1m4-3 1 4-3 3-1-4"/></>,
     server: <><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></>, profile: <><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></>,
     advanced: <><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M18.4 5.6l-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="3"/></>, check: <path d="m5 12 4 4L19 6"/>,
   };
@@ -86,10 +85,9 @@ export default function LauncherOptionsView({ active, onOptionsChanged }: { acti
 
   return <section className={`workspace options-workspace ${active ? "" : "tab-hidden"}`}>
     <div className="workspace-heading"><div><h1>Configuration</h1><p>Manage profiles, servers, and how Arma starts.</p></div><div className="heading-actions"><button className="button quiet" type="button" disabled={busy} onClick={() => void reset()}><OIcon name="reset"/> Defaults</button><button className="button primary-small" type="button" disabled={busy || !dirty} onClick={() => void save()}><OIcon name={dirty ? "save" : "check"}/>{busy ? "Saving…" : dirty ? "Save changes" : "Saved"}</button></div></div>
-    <div className="options-environment"><span><OIcon name="rocket"/><small>Compatibility</small><strong>{view?.environment.selectedProton ?? "Steam default"}</strong></span><span><OIcon name="profile"/><small>Profiles</small><strong>{settings.playerProfiles.length}</strong></span><span><OIcon name="server"/><small>Servers</small><strong>{settings.servers.length}</strong></span><span><OIcon name="display"/><small>Display</small><strong>{settings.displayMode === "game_setting" ? "Use Arma setting" : settings.displayMode === "windowed" ? "Windowed" : "Borderless window"}</strong></span></div>
+    <div className="options-environment"><span><OIcon name="rocket"/><small>Compatibility</small><strong>{view?.environment.selectedProton ?? "Steam default"}</strong></span><span><OIcon name="profile"/><small>Profiles</small><strong>{settings.playerProfiles.length}</strong></span><span><OIcon name="server"/><small>Servers</small><strong>{settings.servers.length}</strong></span></div>
     <div className="options-layout">
       <div className="options-main">
-        <section className="options-card display-card"><header><span className="option-card-icon"><OIcon name="display"/></span><div><h2>Display</h2><p>Arma remembers fullscreen and resolution itself.</p></div></header><div className="display-choices">{([ ["game_setting", "Use Arma setting", "Recommended", "Keeps your saved Fullscreen Window setting."], ["windowed", "Windowed", "", "Runs Arma in a normal resizable window."], ["borderless_window", "Borderless window", "", "Removes the border from windowed mode."] ] as const).map(([value, title, badge, detail]) => <label className={settings.displayMode === value ? "selected" : ""} key={value}><input type="radio" name="display-mode" checked={settings.displayMode === value} onChange={() => update("displayMode", value)}/><span><strong>{title}{badge && <i>{badge}</i>}</strong><small>{detail}</small></span></label>)}</div></section>
         <section className="options-card"><header><span className="option-card-icon"><OIcon name="rocket"/></span><div><h2>Startup</h2><p>Sensible defaults for regular play.</p></div></header><div className="setting-list"><SettingRow title="Skip official launcher" description="Start the game directly from this application." checked={settings.noLauncher} onChange={(value) => update("noLauncher", value)}/><SettingRow title="Skip splash screens" description="Hide publisher logos during startup." checked={settings.noSplash} onChange={(value) => update("noSplash", value)}/><SettingRow title="Skip menu intro" description="Disable the animated background world." checked={settings.skipIntro} onChange={(value) => update("skipIntro", value)}/><SettingRow title="Keep running when unfocused" description="Do not pause when switching to another window." checked={settings.noPause} onChange={(value) => update("noPause", value)}/><SettingRow title="Start with an empty world" description="Reduce work while loading the main menu." checked={settings.worldEmpty} onChange={(value) => update("worldEmpty", value)}/></div></section>
       </div>
       <div className="options-side">

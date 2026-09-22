@@ -7,15 +7,6 @@ use walkdir::WalkDir;
 
 use crate::model::{LauncherEnvironment, LauncherOptionsView};
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DisplayMode {
-    #[default]
-    GameSetting,
-    Windowed,
-    BorderlessWindow,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SavedServer {
@@ -28,9 +19,8 @@ pub struct SavedServer {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct LauncherSettings {
-    pub display_mode: DisplayMode,
     pub profile: Option<String>,
     pub no_launcher: bool,
     pub no_splash: bool,
@@ -58,7 +48,6 @@ pub struct LauncherSettings {
 impl Default for LauncherSettings {
     fn default() -> Self {
         Self {
-            display_mode: DisplayMode::GameSetting,
             profile: None,
             no_launcher: true,
             no_splash: true,
@@ -180,11 +169,6 @@ fn build_view(settings: LauncherSettings) -> Result<LauncherOptionsView, String>
 
 pub(crate) fn arguments(settings: &LauncherSettings) -> Vec<String> {
     let mut args = Vec::new();
-    match settings.display_mode {
-        DisplayMode::GameSetting => {}
-        DisplayMode::Windowed => args.push("-window".into()),
-        DisplayMode::BorderlessWindow => args.extend(["-window".into(), "-noWindowBorder".into()]),
-    }
     for (enabled, flag) in [
         (settings.no_launcher, "-noLauncher"),
         (settings.no_splash, "-noSplash"),
@@ -382,24 +366,37 @@ fn shell_preview(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{DisplayMode, LauncherSettings, SavedServer, arguments, profile_name, validate};
+    use super::{LauncherSettings, SavedServer, arguments, profile_name, validate};
     use std::path::Path;
     #[test]
-    fn defaults_do_not_override_the_game_display_mode() {
+    fn settings_written_before_display_mode_was_removed_still_load() {
+        // displayMode was dropped in 0.3.2. Files on disk still carry it, and
+        // losing this tolerance would take the user's servers and profiles with it.
+        let existing = r#"
+displayMode = "borderless_window"
+noLauncher = true
+playerProfiles = ["Rifleman"]
+
+[[servers]]
+id = "1f0a0c1e-0000-4000-8000-000000000000"
+name = "Unit server"
+address = "play.example.org"
+port = 2302
+"#;
+        let settings: LauncherSettings =
+            toml::from_str(existing).expect("settings from an earlier version must still parse");
+        assert!(settings.no_launcher);
+        assert_eq!(settings.player_profiles, vec!["Rifleman".to_string()]);
+        assert_eq!(settings.servers.len(), 1);
+        assert!(!arguments(&settings).contains(&"-window".into()));
+    }
+
+    #[test]
+    fn launch_arguments_leave_the_game_window_settings_alone() {
         let settings = LauncherSettings::default();
         let args = arguments(&settings);
         assert!(!args.contains(&"-window".into()));
         assert!(args.contains(&"-noSplash".into()));
-    }
-    #[test]
-    fn borderless_window_has_both_required_flags() {
-        let settings = LauncherSettings {
-            display_mode: DisplayMode::BorderlessWindow,
-            ..Default::default()
-        };
-        let args = arguments(&settings);
-        assert!(args.contains(&"-window".into()));
-        assert!(args.contains(&"-noWindowBorder".into()));
     }
     #[test]
     fn rejects_mod_and_battleye_overrides() {

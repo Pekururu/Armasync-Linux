@@ -459,15 +459,6 @@ select:focus { border-color: var(--accent); }
 .option-card-icon .icon { width: 14px; height: 14px; }
 .options-card h2 { font-size: 13px; font-weight: 620; }
 .options-card header p { margin-top: 3px; color: var(--subtle); font-size: 11px; }
-.display-choices { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; padding: 10px; }
-.display-choices label { position: relative; min-height: 74px; display: flex; align-items: center; padding: 9px; background: var(--inset); border: 1px solid var(--border); border-radius: var(--radius-ctl); cursor: pointer; }
-.display-choices label:hover { border-color: var(--border-bright); }
-.display-choices label.selected { background: var(--accent-soft); border-color: rgba(224,166,60,.38); }
-.display-choices input { position: absolute; opacity: 0; }
-.display-choices strong, .display-choices small { display: block; }
-.display-choices strong { font-size: 12px; font-weight: 600; }
-.display-choices strong i { margin-left: 5px; padding: 2px 4px; color: var(--accent); background: rgba(224,166,60,.08); border-radius: var(--radius-ctl); font-size: 11px; font-style: normal; text-transform: uppercase; }
-.display-choices small { margin-top: 6px; color: var(--subtle); font-size: 11px; line-height: 1.4; }
 .setting-list { padding: 2px 12px 4px; }
 .launch-setting-row { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid transparent; }
 .launch-setting-row:last-child { border-bottom: 0; }
@@ -625,8 +616,6 @@ select:focus { border-color: var(--accent); }
 
 @media (max-width: 1050px) {
   .options-layout, .trouble-layout { grid-template-columns: minmax(390px,1fr) minmax(270px,.7fr); }
-  .display-choices { grid-template-columns: 1fr; }
-  .display-choices label { min-height: 54px; }
 }
 
 .voice-workspace { min-height: 0; }
@@ -822,7 +811,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .destination-help,
 .security-note,
 .options-card header p,
-.display-choices small,
 .launch-setting-row small,
 .server-list small,
 .managed-profile small,
@@ -860,7 +848,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .destination-field button,
 .options-environment strong,
 .options-card h2,
-.display-choices strong,
 .launch-setting-row strong,
 .option-fields input,
 .option-fields select,
@@ -906,7 +893,6 @@ select option:checked { color: var(--text); background: rgba(224, 166, 60, .25);
 .trouble-side,
 .voice-extras { gap: 8px; }
 .options-card > header { min-height: 46px; }
-.display-choices label { min-height: 54px; }
 .launch-setting-row { min-height: 48px; }
 
 .repository-layout { grid-template-columns: 240px minmax(0, 1fr); }
