@@ -128,12 +128,16 @@ fn remove_repository(id: String) -> Result<Vec<repository_store::SavedRepository
 async fn check_repository_files(
     id: String,
     selected_addons: Vec<String>,
+    on_progress: tauri::ipc::Channel<model::CheckProgress>,
 ) -> Result<model::SyncPlan, String> {
     let saved = repository_store::get(&id)?;
     repository::plan_sync(
         &saved.autoconfig_url,
         selected_addons,
         PathBuf::from(saved.destination),
+        move |progress| {
+            let _ = on_progress.send(progress);
+        },
     )
     .await
     .map_err(|error| error.to_string())

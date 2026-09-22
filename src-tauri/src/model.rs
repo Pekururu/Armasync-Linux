@@ -114,6 +114,27 @@ pub struct SyncProgress {
     pub current_file: Option<String>,
 }
 
+/// Emitted while verifying local files against the repository manifest.
+/// Hashing every file is slow enough that the UI must show movement.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckProgress {
+    pub phase: CheckPhase,
+    pub addon: Option<String>,
+    pub checked_files: usize,
+    pub total_files: usize,
+    pub checked_bytes: u64,
+    pub total_bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckPhase {
+    /// Fetching the repository's file list; no per-file counts yet.
+    Metadata,
+    Verifying,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceRuntimeComponent {

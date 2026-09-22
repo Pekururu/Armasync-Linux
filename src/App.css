@@ -400,6 +400,18 @@ select:focus { border-color: var(--accent); }
 .repository-addon-row strong { color: var(--text); font-size: 12px; font-weight: 580; }
 .repository-addon-row small { margin-top: 2px; color: var(--subtle); font-family: "JetBrains Mono", monospace; font-size: 11px; }
 .repository-addon-row > span:nth-of-type(2) { color: var(--subtle); font-size: 11px; white-space: nowrap; }
+.repository-addon-meta { display: flex; align-items: center; gap: 6px; }
+.addon-mark { display: inline-grid; place-items: center; width: 15px; height: 15px; }
+.addon-mark .icon { width: 13px; height: 13px; }
+.addon-mark.ok { color: var(--status-ok); }
+.addon-mark.changed { color: var(--status-changed); }
+.addon-mark.missing, .addon-mark.unresolved { color: var(--status-missing); }
+.transfer-outcome { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 8px; align-items: start; }
+.transfer-outcome .outcome-mark { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid transparent; }
+.transfer-outcome.success .outcome-mark { color: var(--status-ok); background: rgba(116,181,141,.08); border-color: rgba(116,181,141,.24); }
+.transfer-outcome.failure .outcome-mark { color: var(--status-missing); background: rgba(217,120,112,.08); border-color: rgba(217,120,112,.26); }
+.sync-progress-track.indeterminate span { animation: repo-indeterminate 1.1s ease-in-out infinite; }
+@keyframes repo-indeterminate { 0% { opacity: .25; } 50% { opacity: .75; } 100% { opacity: .25; } }
 .repository-addon-row i { position: absolute; right: 3px; top: 3px; color: var(--status-missing); font-size: 11px; font-style: normal; }
 .repository-check-panel { min-width: 0; padding: 14px 12px; background: var(--surface-raised); overflow: auto; }
 .repository-check-panel h3 { margin: 6px 0 6px; font-size: 13px; font-weight: 620; }

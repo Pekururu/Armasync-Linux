@@ -8,12 +8,20 @@ copying its crowded nested-tab layout:
 3. Connect to retrieve the current `.a3s/sync` manifest and `.a3s/events` modsets.
 4. Select all addons or one published modset.
 5. Create a linked addon group, or update the group previously linked to that modset.
-6. Check local files explicitly.
-7. Review verified, missing, and replacement counts.
+6. Check local files explicitly, with live progress while hashing.
+7. Review verified, missing, and replacement counts, and the per-addon state
+   marked on every row.
 8. Synchronize explicitly after a native confirmation dialog.
 
+Checking reports its phase, file counts, and the addon being verified through a
+Tauri channel, on a 120 ms timer — a repository can hold a hundred thousand
+files, so it does not report per file. Each addon row then carries its own mark:
+verified, changed, not installed, or unresolved.
+
 Synchronization reports real transferred bytes, percentage, completed files,
-and the current file through a Tauri channel. Transfers can be paused, resumed,
+and the current file through a Tauri channel. Transfer speed and remaining time
+are derived in the interface from those totals, smoothed so the figure is
+readable. Transfers can be paused, resumed,
 or stopped; stopping removes staged partial data and rolls back an interrupted
 install.
 

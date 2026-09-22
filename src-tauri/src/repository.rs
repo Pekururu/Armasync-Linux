@@ -14,13 +14,15 @@ use suppaftp::{FtpError, FtpStream, types::FileType};
 use url::Url;
 
 use crate::model::{
-    AddonCatalogEntry, ManifestSummary, PublishedModset, RepositoryInfo, RepositorySnapshot,
-    SyncAction, SyncPhase, SyncPlan, SyncPlanItem, SyncProgress, SyncResult,
+    AddonCatalogEntry, CheckPhase, CheckProgress, ManifestSummary, PublishedModset, RepositoryInfo,
+    RepositorySnapshot, SyncAction, SyncPhase, SyncPlan, SyncPlanItem, SyncProgress, SyncResult,
 };
 
 const MAX_AUTOCONFIG_SIZE: usize = 1024 * 1024;
 const MAX_MANIFEST_SIZE: usize = 64 * 1024 * 1024;
 const MAX_PARALLEL_DOWNLOADS: usize = 8;
+/// How often the file check reports back while hashing.
+const REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(120);
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
@@ -218,11 +220,22 @@ pub async fn inspect(source_url: &str) -> Result<RepositorySnapshot, RepositoryE
     })
 }
 
-pub async fn plan_sync(
+pub async fn plan_sync<F: Fn(CheckProgress) + Send + 'static>(
     source_url: &str,
     selected_addons: Vec<String>,
     destination: PathBuf,
+    on_progress: F,
 ) -> Result<SyncPlan, RepositoryError> {
+    // Fetching the file list happens before any per-file counts exist, and on a
+    // large repository it is not quick.
+    on_progress(CheckProgress {
+        phase: CheckPhase::Metadata,
+        addon: None,
+        checked_files: 0,
+        total_files: 0,
+        checked_bytes: 0,
+        total_bytes: 0,
+    });
     let endpoint = download_autoconfig(source_url).await?;
     let transfer = TransferEndpoint {
         host: endpoint.info.host,
@@ -232,7 +245,7 @@ pub async fn plan_sync(
     };
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
-        build_sync_plan(&manifest, &selected_addons, &destination)
+        build_sync_plan(&manifest, &selected_addons, &destination, &on_progress)
     })
     .await
     .map_err(|error| RepositoryError::Local(error.to_string()))?
@@ -273,7 +286,7 @@ where
     };
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
-        let plan = build_sync_plan(&manifest, &selected_addons, &destination)?;
+        let plan = build_sync_plan(&manifest, &selected_addons, &destination, &|_| {})?;
         if !plan.missing_addons.is_empty() || !plan.ambiguous_addons.is_empty() {
             return Err(RepositoryError::Sync(format!(
                 "unresolved addons; missing: {:?}; ambiguous: {:?}",
@@ -683,10 +696,11 @@ fn build_addon_catalog(entries: &[ManifestEntry]) -> Vec<AddonCatalogEntry> {
     catalog
 }
 
-fn build_sync_plan(
+fn build_sync_plan<F: Fn(CheckProgress)>(
     manifest: &SyncManifest,
     selected_addons: &[String],
     destination: &Path,
+    on_progress: &F,
 ) -> Result<SyncPlan, RepositoryError> {
     let mut requested_addons = Vec::new();
     let mut requested_seen = std::collections::HashSet::new();
@@ -739,11 +753,29 @@ fn build_sync_plan(
         operations: Vec::new(),
     };
 
-    for entry in manifest
+    let selected_entries: Vec<&ManifestEntry> = manifest
         .entries
         .iter()
         .filter(|entry| resolved_names.contains(&entry.addon_name.to_ascii_lowercase()))
-    {
+        .collect();
+    let total_files = selected_entries.len();
+    let total_bytes = selected_entries
+        .iter()
+        .fold(0u64, |sum, entry| sum.saturating_add(entry.size));
+    let mut checked_bytes = 0u64;
+    // Hashing dominates this loop, so report on a timer rather than per file:
+    // a repository can hold a hundred thousand of them.
+    let mut last_report = std::time::Instant::now();
+    on_progress(CheckProgress {
+        phase: CheckPhase::Verifying,
+        addon: None,
+        checked_files: 0,
+        total_files,
+        checked_bytes: 0,
+        total_bytes,
+    });
+
+    for entry in selected_entries {
         plan.total_files += 1;
         plan.final_bytes = plan.final_bytes.saturating_add(entry.size);
         let local_path = destination.join(&entry.local_path);
@@ -786,6 +818,19 @@ fn build_sync_plan(
                 relative_path: entry.local_path.to_string_lossy().into_owned(),
                 transfer_bytes,
                 final_bytes: entry.size,
+            });
+        }
+
+        checked_bytes = checked_bytes.saturating_add(entry.size);
+        if last_report.elapsed() >= REPORT_INTERVAL || plan.total_files == total_files {
+            last_report = std::time::Instant::now();
+            on_progress(CheckProgress {
+                phase: CheckPhase::Verifying,
+                addon: Some(entry.addon_name.clone()),
+                checked_files: plan.total_files,
+                total_files,
+                checked_bytes,
+                total_bytes,
             });
         }
     }
@@ -1302,9 +1347,10 @@ fn long_field(object: &ObjectData, name: &str) -> Result<u64, RepositoryError> {
 #[cfg(test)]
 mod sync_control_tests {
     use super::{
-        AddonContext, MAX_PARALLEL_DOWNLOADS, RepositoryError, SyncControl, SyncCoordinator,
-        download_worker_count, should_start_addon,
+        AddonContext, MAX_PARALLEL_DOWNLOADS, ManifestEntry, RepositoryError, SyncControl,
+        SyncCoordinator, SyncManifest, build_sync_plan, download_worker_count, should_start_addon,
     };
+    use crate::model::ManifestSummary;
     use std::path::PathBuf;
     use std::sync::{Arc, mpsc};
     use std::time::Duration;
@@ -1380,6 +1426,61 @@ mod sync_control_tests {
         assert_eq!(download_worker_count(4), 4);
         assert_eq!(download_worker_count(usize::MAX), MAX_PARALLEL_DOWNLOADS);
     }
+    /// The repository fixtures this file's other tests want are not in the
+    /// repo, so build a manifest by hand rather than skipping the check.
+    fn manifest_of(sizes: &[u64]) -> SyncManifest {
+        let entries: Vec<ManifestEntry> = sizes
+            .iter()
+            .enumerate()
+            .map(|(index, size)| ManifestEntry {
+                remote_path: PathBuf::from(format!("@Addon/file{index}.pbo")),
+                local_path: PathBuf::from(format!("@Addon/file{index}.pbo")),
+                addon_name: "@Addon".into(),
+                addon_remote_root: PathBuf::from("@Addon"),
+                size: *size,
+                compressed_size: 0,
+                sha1: Some("a".repeat(40)),
+                compressed: false,
+            })
+            .collect();
+        SyncManifest {
+            summary: ManifestSummary {
+                directories: 1,
+                files: entries.len(),
+                total_bytes: sizes.iter().sum(),
+                compressed_files: 0,
+                addon_roots: 1,
+                unhashed_files: 0,
+            },
+            entries,
+        }
+    }
+
+    #[test]
+    fn the_file_check_reports_progress_that_reaches_its_own_total() {
+        let manifest = manifest_of(&[10, 20, 30, 40]);
+        // Nothing is installed at this path, so every entry resolves without
+        // hashing and the plan is pure "download".
+        let destination = PathBuf::from("/nonexistent/armasync-check-progress");
+        let reports = std::sync::Mutex::new(Vec::new());
+        let plan = build_sync_plan(
+            &manifest,
+            &["@Addon".into()],
+            &destination,
+            &|progress| reports.lock().unwrap().push(progress),
+        )
+        .unwrap();
+
+        let reports = reports.into_inner().unwrap();
+        assert!(!reports.is_empty(), "verifying must report at least once");
+        assert!(reports.iter().all(|r| r.checked_files <= r.total_files));
+        let last = reports.last().unwrap();
+        // A bar that stops short of its own total reads as a hang.
+        assert_eq!(last.checked_files, last.total_files);
+        assert_eq!(last.total_files, plan.total_files);
+        assert_eq!(last.checked_bytes, last.total_bytes);
+        assert_eq!(last.total_bytes, 100);
+    }
 }
 
 #[cfg(any())]
@@ -1450,6 +1551,7 @@ mod tests {
             &manifest,
             &["@LT_CBA_A3".into(), "@LT_ACRE2".into()],
             destination.path(),
+            &|_| {},
         )
         .unwrap();
         assert_eq!(plan.resolved_addons.len(), 2);
@@ -1474,6 +1576,7 @@ mod tests {
             &manifest,
             &["@does_not_exist".into(), "@ace_nomedical".into()],
             destination.path(),
+            &|_| {},
         )
         .unwrap();
         assert_eq!(plan.missing_addons, ["@does_not_exist"]);
@@ -1498,9 +1601,11 @@ mod tests {
             &manifest,
             std::slice::from_ref(&entry.addon_name),
             destination.path(),
+            &|_| {},
         )
         .unwrap();
         assert_eq!(plan.verified_files, 1);
         assert_eq!(plan.total_files, plan.download_files + 1);
     }
+
 }
