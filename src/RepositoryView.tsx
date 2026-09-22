@@ -101,7 +101,9 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
       downloadBytes += state.transferBytes;
       verifiedFiles += Math.max(0, addon.files - state.missing - state.changed);
     }
-    return { verifiedFiles, downloadFiles, replacementFiles, downloadBytes, unresolved };
+    // Missing and changed files are both transfers; anything that asks "is
+    // there work to do?" must count both.
+    return { verifiedFiles, downloadFiles, replacementFiles, downloadBytes, unresolved, transferFiles: downloadFiles + replacementFiles };
   }, [snapshot, selectedAddons, checked]);
 
   // What a check would still have to do.
@@ -249,19 +251,19 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
   }
 
   async function synchronize() {
-    if (!selectedId || summary.downloadFiles === 0) return;
-    const approved = await confirm(`Download ${summary.downloadFiles} files (${bytes(summary.downloadBytes)}) to ${selectedRepository?.destination}? Existing replacements are backed up first.`, { title: "Synchronize repository", kind: "warning" });
+    if (!selectedId || summary.transferFiles === 0) return;
+    const approved = await confirm(`Download ${summary.transferFiles} files (${bytes(summary.downloadBytes)}) to ${selectedRepository?.destination}? Existing replacements are backed up first.`, { title: "Synchronize repository", kind: "warning" });
     if (!approved) return;
     const jobId = crypto.randomUUID();
     const progress = new Channel<SyncProgress>();
     progress.onmessage = (update) => setSyncProgress((current) => update.totalBytes ? update : {
       ...update,
       totalBytes: current?.totalBytes ?? summary.downloadBytes,
-      totalFiles: current?.totalFiles ?? summary.downloadFiles,
+      totalFiles: current?.totalFiles ?? summary.transferFiles,
     });
     stopRequested.current = false;
     setBusy("sync"); setError(null); setResult(null); setSyncMessage(null); setSyncJobId(jobId); setSyncPaused(false); setSyncStopping(false);
-    setSyncProgress({ phase: "preparing", downloadedBytes: 0, totalBytes: summary.downloadBytes, completedFiles: 0, totalFiles: summary.downloadFiles, currentFile: null });
+    setSyncProgress({ phase: "preparing", downloadedBytes: 0, totalBytes: summary.downloadBytes, completedFiles: 0, totalFiles: summary.transferFiles, currentFile: null });
     try {
       const done = await invoke<SyncResult>("synchronize_repository", { id: selectedId, selectedAddons: [...selectedAddons], jobId, onProgress: progress });
       setResult(done);
@@ -354,7 +356,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
                     : <p>Compare selected repository files with the destination using size and SHA-1 hashes.</p>}
                   {syncMessage && <p className="repository-sync-message">{syncMessage}</p>}
                 </div>
-                <div className="check-actions"><button className="button" type="button" disabled={busy !== null || selectedAddons.size === 0} onClick={() => void checkFiles(pendingAddons.length > 0 ? undefined : [...selectedAddons])}><RepoIcon name="check"/>{busy === "check" ? "Checking…" : pendingAddons.length === 0 && hasCheckedSelection ? "Re-check all" : hasCheckedSelection ? `Check ${pendingAddons.length} new` : "Check files"}</button>{summary.downloadFiles + summary.replacementFiles > 0 && <button className="button primary-small" type="button" disabled={busy !== null || summary.unresolved.length > 0} onClick={() => void synchronize()}><RepoIcon name="download"/>{busy === "sync" ? "Synchronizing…" : "Synchronize"}</button>}</div>
+                <div className="check-actions"><button className="button" type="button" disabled={busy !== null || selectedAddons.size === 0} onClick={() => void checkFiles(pendingAddons.length > 0 ? undefined : [...selectedAddons])}><RepoIcon name="check"/>{busy === "check" ? "Checking…" : pendingAddons.length === 0 && hasCheckedSelection ? "Re-check all" : hasCheckedSelection ? `Check ${pendingAddons.length} new` : "Check files"}</button>{summary.transferFiles > 0 && <button className="button primary-small" type="button" disabled={busy !== null || summary.unresolved.length > 0} onClick={() => void synchronize()}><RepoIcon name="download"/>{busy === "sync" ? "Synchronizing…" : "Synchronize"}</button>}</div>
               </div>
             </aside>
           </div>
