@@ -21,6 +21,8 @@ use crate::model::{
 const MAX_AUTOCONFIG_SIZE: usize = 1024 * 1024;
 const MAX_MANIFEST_SIZE: usize = 64 * 1024 * 1024;
 const MAX_PARALLEL_DOWNLOADS: usize = 8;
+const HTTPS_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const HTTPS_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// How often the file check reports back while hashing.
 const REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(120);
 
@@ -180,12 +182,7 @@ struct ManifestEntry {
 
 pub async fn inspect(source_url: &str) -> Result<RepositorySnapshot, RepositoryError> {
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host.clone(),
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     let (manifest, published_modsets) =
         tokio::task::spawn_blocking(move || fetch_repository_metadata(&transfer))
             .await
@@ -237,12 +234,7 @@ pub async fn plan_sync<F: Fn(CheckProgress) + Send + 'static>(
         total_bytes: 0,
     });
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host,
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
         build_sync_plan(&manifest, &selected_addons, &destination, &on_progress)
@@ -251,8 +243,15 @@ pub async fn plan_sync<F: Fn(CheckProgress) + Send + 'static>(
     .map_err(|error| RepositoryError::Local(error.to_string()))?
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TransferProtocol {
+    Ftp,
+    Https,
+}
+
 #[derive(Clone)]
 struct TransferEndpoint {
+    protocol: TransferProtocol,
     host: String,
     port: i32,
     login: String,
@@ -278,12 +277,7 @@ where
         current_file: None,
     });
     let endpoint = download_autoconfig(source_url).await?;
-    let transfer = TransferEndpoint {
-        host: endpoint.info.host,
-        port: endpoint.info.port.unwrap_or(21),
-        login: endpoint.login,
-        password: endpoint.password,
-    };
+    let transfer = make_transfer_endpoint(&endpoint)?;
     tokio::task::spawn_blocking(move || {
         let (manifest, _) = fetch_repository_metadata(&transfer)?;
         let plan = build_sync_plan(&manifest, &selected_addons, &destination, &|_| {})?;
@@ -369,7 +363,7 @@ fn decode_autoconfig(
         .map(|(_, value)| value.to_owned())
         .ok_or_else(|| RepositoryError::Unsupported("missing protocol type".into()))?;
 
-    if protocol_name != "FTP" {
+    if protocol_name != "FTP" && protocol_name != "HTTPS" {
         return Err(RepositoryError::Unsupported(format!(
             "transfer protocol {protocol_name} is not implemented yet"
         )));
@@ -390,9 +384,149 @@ fn decode_autoconfig(
     })
 }
 
+fn make_transfer_endpoint(
+    endpoint: &RepositoryEndpoint,
+) -> Result<TransferEndpoint, RepositoryError> {
+    let protocol = match endpoint.info.protocol.as_str() {
+        "FTP" => TransferProtocol::Ftp,
+        "HTTPS" => TransferProtocol::Https,
+        protocol => {
+            return Err(RepositoryError::Unsupported(format!(
+                "transfer protocol {protocol} is not implemented yet"
+            )));
+        }
+    };
+    let default_port = match protocol {
+        TransferProtocol::Ftp => 21,
+        TransferProtocol::Https => 443,
+    };
+    Ok(TransferEndpoint {
+        protocol,
+        host: endpoint.info.host.clone(),
+        port: endpoint.info.port.unwrap_or(default_port),
+        login: endpoint.login.clone(),
+        password: endpoint.password.clone(),
+    })
+}
+
+fn https_client() -> Result<reqwest::blocking::Client, RepositoryError> {
+    reqwest::blocking::Client::builder()
+        .connect_timeout(HTTPS_CONNECT_TIMEOUT)
+        // For blocking responses this is applied to each network read, so a
+        // healthy large download can run for hours while a stalled one stops.
+        .timeout(HTTPS_READ_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.url().scheme() != "https" {
+                attempt.error("HTTPS repository redirected to an insecure URL")
+            } else if attempt.previous().len() >= 10 {
+                attempt.error("too many HTTPS repository redirects")
+            } else {
+                attempt.follow()
+            }
+        }))
+        .build()
+        .map_err(|error| RepositoryError::Transfer(error.to_string()))
+}
+
+fn https_resource_url(
+    endpoint: &TransferEndpoint,
+    remote_path: &str,
+) -> Result<Url, RepositoryError> {
+    let host = endpoint.host.trim();
+    let base = if host.contains("://") {
+        host.to_owned()
+    } else {
+        format!("https://{host}")
+    };
+    let mut url = Url::parse(&base)
+        .map_err(|error| RepositoryError::Transfer(format!("invalid HTTPS host: {error}")))?;
+    if url.scheme() != "https" || url.cannot_be_a_base() {
+        return Err(RepositoryError::Transfer(
+            "HTTPS repository host is not a valid HTTPS URL".into(),
+        ));
+    }
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(RepositoryError::Transfer(
+            "HTTPS repository host contains unsupported URL parts".into(),
+        ));
+    }
+    let port = u16::try_from(endpoint.port)
+        .map_err(|_| RepositoryError::Transfer("invalid HTTPS port".into()))?;
+    if port != 443 {
+        url.set_port(Some(port))
+            .map_err(|_| RepositoryError::Transfer("invalid HTTPS port".into()))?;
+    }
+    {
+        let mut segments = url.path_segments_mut().map_err(|_| {
+            RepositoryError::Transfer("HTTPS repository host cannot contain paths".into())
+        })?;
+        segments.pop_if_empty();
+        segments.extend(remote_path.split('/').filter(|segment| !segment.is_empty()));
+    }
+    Ok(url)
+}
+
+fn https_request(
+    client: &reqwest::blocking::Client,
+    endpoint: &TransferEndpoint,
+    remote_path: &str,
+) -> Result<reqwest::blocking::Response, RepositoryError> {
+    let url = https_resource_url(endpoint, remote_path)?;
+    let mut request = client
+        .get(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "identity");
+    if !endpoint.login.is_empty() {
+        request = request.basic_auth(&endpoint.login, Some(&endpoint.password));
+    }
+    request
+        .send()
+        .and_then(reqwest::blocking::Response::error_for_status)
+        .map_err(|error| RepositoryError::Transfer(format!("{remote_path}: {error}")))
+}
+
+fn fetch_https_bytes(
+    client: &reqwest::blocking::Client,
+    endpoint: &TransferEndpoint,
+    remote_path: &str,
+    max_size: usize,
+) -> Result<Vec<u8>, RepositoryError> {
+    let response = https_request(client, endpoint, remote_path)?;
+    if response
+        .content_length()
+        .is_some_and(|size| size > max_size as u64)
+    {
+        return Err(RepositoryError::TooLarge);
+    }
+    let mut bytes = Vec::new();
+    response
+        .take(max_size as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RepositoryError::Transfer(format!("{remote_path}: {error}")))?;
+    if bytes.len() > max_size {
+        return Err(RepositoryError::TooLarge);
+    }
+    Ok(bytes)
+}
+
 fn fetch_repository_metadata(
     endpoint: &TransferEndpoint,
 ) -> Result<(SyncManifest, Vec<PublishedModset>), RepositoryError> {
+    if endpoint.protocol == TransferProtocol::Https {
+        let client = https_client()?;
+        let manifest_bytes =
+            fetch_https_bytes(&client, endpoint, ".a3s/sync", MAX_MANIFEST_SIZE)?;
+        let events_bytes =
+            fetch_https_bytes(&client, endpoint, ".a3s/events", MAX_AUTOCONFIG_SIZE)?;
+        return Ok((
+            decode_manifest(&manifest_bytes)?,
+            decode_events(&events_bytes)?,
+        ));
+    }
+
     let mut ftp = connect_ftp(endpoint)?;
     let manifest_bytes = ftp
         .retr_as_buffer(".a3s/sync")
@@ -1111,7 +1245,14 @@ where
         for _ in 0..worker_count {
             workers.push(scope.spawn(|| {
                 let result = (|| {
-                    let mut ftp = connect_ftp(endpoint)?;
+                    let mut ftp = match endpoint.protocol {
+                        TransferProtocol::Ftp => Some(connect_ftp(endpoint)?),
+                        TransferProtocol::Https => None,
+                    };
+                    let https = match endpoint.protocol {
+                        TransferProtocol::Ftp => None,
+                        TransferProtocol::Https => Some(https_client()?),
+                    };
                     loop {
                         control.checkpoint()?;
                         if failed.load(Ordering::Acquire) {
@@ -1121,21 +1262,40 @@ where
                         let Some(entry) = entries.get(index).copied() else {
                             break;
                         };
-                        download_entry(
-                            &mut ftp,
-                            entry,
-                            staging_root,
-                            total_bytes,
-                            entries.len(),
-                            control,
-                            &failed,
-                            &downloaded_bytes,
-                            &completed_files,
-                            &progress_gate,
-                            on_progress,
-                        )?;
+                        if let Some(client) = &https {
+                            download_entry_https(
+                                client,
+                                endpoint,
+                                entry,
+                                staging_root,
+                                total_bytes,
+                                entries.len(),
+                                control,
+                                &failed,
+                                &downloaded_bytes,
+                                &completed_files,
+                                &progress_gate,
+                                on_progress,
+                            )?;
+                        } else if let Some(ftp) = &mut ftp {
+                            download_entry(
+                                ftp,
+                                entry,
+                                staging_root,
+                                total_bytes,
+                                entries.len(),
+                                control,
+                                &failed,
+                                &downloaded_bytes,
+                                &completed_files,
+                                &progress_gate,
+                                on_progress,
+                            )?;
+                        }
                     }
-                    let _ = ftp.quit();
+                    if let Some(mut ftp) = ftp {
+                        let _ = ftp.quit();
+                    }
                     Ok::<(), RepositoryError>(())
                 })();
                 if let Err(error) = result {
@@ -1170,6 +1330,140 @@ where
     } else {
         Ok(())
     }
+}
+
+fn stream_exact<R, W, B, A>(
+    reader: &mut R,
+    writer: &mut W,
+    expected: u64,
+    label: &str,
+    mut before_read: B,
+    mut after_write: A,
+) -> Result<(), RepositoryError>
+where
+    R: Read,
+    W: Write,
+    B: FnMut() -> Result<(), RepositoryError>,
+    A: FnMut(usize) -> Result<(), RepositoryError>,
+{
+    let mut received = 0_u64;
+    let mut buffer = [0_u8; 256 * 1024];
+    loop {
+        before_read()?;
+        let count = reader
+            .read(&mut buffer)
+            .map_err(|error| RepositoryError::Transfer(format!("{label}: {error}")))?;
+        if count == 0 {
+            break;
+        }
+        received = received.saturating_add(count as u64);
+        if received > expected {
+            return Err(RepositoryError::TooLarge);
+        }
+        writer
+            .write_all(&buffer[..count])
+            .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+        after_write(count)?;
+    }
+    if received != expected {
+        return Err(RepositoryError::Transfer(format!(
+            "{label}: expected {expected} bytes, received {received}"
+        )));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn download_entry_https<F>(
+    client: &reqwest::blocking::Client,
+    endpoint: &TransferEndpoint,
+    entry: &ManifestEntry,
+    staging_root: &Path,
+    total_bytes: u64,
+    total_files: usize,
+    control: &SyncControl,
+    failed: &AtomicBool,
+    downloaded_bytes: &AtomicU64,
+    completed_files: &AtomicUsize,
+    progress_gate: &Mutex<(u64, Instant)>,
+    on_progress: &F,
+) -> Result<(), RepositoryError>
+where
+    F: Fn(SyncProgress) + Sync,
+{
+    let target = staging_root.join(&entry.local_path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    }
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&target)
+        .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    let remote = entry.remote_path.to_string_lossy().replace('\\', "/");
+    let current_file = entry.local_path.to_string_lossy().into_owned();
+    emit_download_progress(
+        downloaded_bytes,
+        completed_files,
+        total_bytes,
+        total_files,
+        &current_file,
+        progress_gate,
+        on_progress,
+        true,
+    )?;
+
+    let mut response = https_request(client, endpoint, &remote)?;
+    if response
+        .content_length()
+        .is_some_and(|size| size > entry.size)
+    {
+        return Err(RepositoryError::TooLarge);
+    }
+    stream_exact(
+        &mut response,
+        &mut file,
+        entry.size,
+        &remote,
+        || {
+            control.checkpoint()?;
+            if failed.load(Ordering::Acquire) {
+                Err(RepositoryError::Cancelled)
+            } else {
+                Ok(())
+            }
+        },
+        |count| {
+            downloaded_bytes.fetch_add(count as u64, Ordering::AcqRel);
+            emit_download_progress(
+                downloaded_bytes,
+                completed_files,
+                total_bytes,
+                total_files,
+                &current_file,
+                progress_gate,
+                on_progress,
+                false,
+            )
+        },
+    )?;
+    file.flush()
+        .map_err(|error| RepositoryError::Sync(error.to_string()))?;
+    control.checkpoint()?;
+    verify_download(&target, entry)?;
+    completed_files.fetch_add(1, Ordering::AcqRel);
+    emit_download_progress(
+        downloaded_bytes,
+        completed_files,
+        total_bytes,
+        total_files,
+        &current_file,
+        progress_gate,
+        on_progress,
+        true,
+    )?;
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1432,8 +1726,9 @@ fn long_field(object: &ObjectData, name: &str) -> Result<u64, RepositoryError> {
 mod sync_control_tests {
     use super::{
         AddonContext, Digest, MAX_PARALLEL_DOWNLOADS, ManifestEntry, RepositoryError, Sha1,
-        SyncControl, SyncCoordinator, SyncManifest, build_sync_plan, download_worker_count,
-        should_start_addon,
+        SyncControl, SyncCoordinator, SyncManifest, TransferEndpoint, TransferProtocol,
+        build_sync_plan, download_worker_count, https_resource_url, should_start_addon,
+        stream_exact,
     };
     use crate::model::ManifestSummary;
     use std::path::PathBuf;
@@ -1511,6 +1806,78 @@ mod sync_control_tests {
         assert_eq!(download_worker_count(4), 4);
         assert_eq!(download_worker_count(usize::MAX), MAX_PARALLEL_DOWNLOADS);
     }
+
+    #[test]
+    fn https_urls_keep_the_repository_path_and_escape_file_names() {
+        let endpoint = TransferEndpoint {
+            protocol: TransferProtocol::Https,
+            host: "repo.example/root".into(),
+            port: 8443,
+            login: String::new(),
+            password: String::new(),
+        };
+        let url = https_resource_url(&endpoint, "@Addon/a file#1.pbo").unwrap();
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.port(), Some(8443));
+        assert_eq!(url.path(), "/root/@Addon/a%20file%231.pbo");
+        assert!(url.query().is_none());
+        assert!(url.fragment().is_none());
+    }
+
+    #[test]
+    fn https_urls_reject_a_downgrade_to_plain_http() {
+        let endpoint = TransferEndpoint {
+            protocol: TransferProtocol::Https,
+            host: "http://repo.example/root".into(),
+            port: 443,
+            login: String::new(),
+            password: String::new(),
+        };
+        assert!(https_resource_url(&endpoint, ".a3s/sync").is_err());
+    }
+
+    #[test]
+    fn streamed_downloads_reject_truncated_and_oversized_files() {
+        let mut truncated = std::io::Cursor::new(b"abc");
+        let mut written = Vec::new();
+        let error = stream_exact(&mut truncated, &mut written, 4, "file", || Ok(()), |_| Ok(()))
+            .unwrap_err();
+        assert!(matches!(error, RepositoryError::Transfer(_)));
+
+        let mut oversized = std::io::Cursor::new(b"abcde");
+        let mut written = Vec::new();
+        let error = stream_exact(&mut oversized, &mut written, 4, "file", || Ok(()), |_| Ok(()))
+            .unwrap_err();
+        assert!(matches!(error, RepositoryError::TooLarge));
+    }
+
+    #[test]
+    fn streamed_downloads_check_control_and_report_each_chunk() {
+        let contents = vec![7_u8; 300 * 1024];
+        let mut reader = std::io::Cursor::new(&contents);
+        let mut written = Vec::new();
+        let checks = std::cell::Cell::new(0);
+        let reported = std::cell::Cell::new(0_usize);
+        stream_exact(
+            &mut reader,
+            &mut written,
+            contents.len() as u64,
+            "file",
+            || {
+                checks.set(checks.get() + 1);
+                Ok(())
+            },
+            |count| {
+                reported.set(reported.get() + count);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(written, contents);
+        assert_eq!(reported.get(), contents.len());
+        assert!(checks.get() >= 3, "control is checked before every read");
+    }
+
     /// The repository fixtures this file's other tests want are not in the
     /// repo, so build a manifest by hand rather than skipping the check.
     fn manifest_of(sizes: &[u64]) -> SyncManifest {
