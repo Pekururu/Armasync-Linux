@@ -1,4 +1,5 @@
 mod addon_groups;
+mod bindings;
 mod check_cache;
 mod diagnostics;
 mod dlc;
@@ -6,6 +7,7 @@ mod game_launch;
 mod launch_selection;
 pub(crate) mod launcher_options;
 mod model;
+mod persistence;
 mod process;
 mod repository;
 mod repository_store;
@@ -129,19 +131,27 @@ fn remove_repository(id: String) -> Result<Vec<repository_store::SavedRepository
 async fn check_repository_files(
     id: String,
     selected_addons: Vec<String>,
+    full_verification: bool,
+    job_id: String,
     on_progress: tauri::ipc::Channel<model::CheckProgress>,
+    coordinator: tauri::State<'_, repository::SyncCoordinator>,
 ) -> Result<model::SyncPlan, String> {
     let saved = repository_store::get(&id)?;
-    repository::plan_sync(
+    let control = coordinator.begin(job_id.clone())?;
+    let result = repository::plan_sync(
         &saved.autoconfig_url,
         selected_addons,
         PathBuf::from(saved.destination),
+        full_verification,
+        control,
         move |progress| {
             let _ = on_progress.send(progress);
         },
     )
     .await
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string());
+    coordinator.finish(&job_id);
+    result
 }
 
 #[tauri::command]

@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, ts_rs::TS)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GroupSource {
     pub repository_id: String,
     pub modset_name: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, ts_rs::TS)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AddonGroup {
     pub id: String,
@@ -16,6 +16,7 @@ pub struct AddonGroup {
     #[serde(default)]
     pub addon_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub source: Option<GroupSource>,
 }
 
@@ -39,29 +40,13 @@ pub fn save(groups: Vec<AddonGroup>) -> Result<Vec<AddonGroup>, String> {
     validate(&groups)?;
     let config = AddonGroupsConfig { groups };
     let path = config_path()?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "invalid addon group settings path".to_owned())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("could not create settings directory: {error}"))?;
-    let output = toml::to_string_pretty(&config)
-        .map_err(|error| format!("could not encode addon groups: {error}"))?;
-    let temporary = path.with_extension("toml.tmp");
-    fs::write(&temporary, output)
-        .map_err(|error| format!("could not write addon groups: {error}"))?;
-    fs::rename(&temporary, &path)
-        .map_err(|error| format!("could not commit addon groups: {error}"))?;
+    let _lock = crate::persistence::lock(&path)?;
+    crate::persistence::save(&path, &config)?;
     Ok(config.groups)
 }
 
 fn load() -> Result<AddonGroupsConfig, String> {
-    let path = config_path()?;
-    if !path.is_file() {
-        return Ok(AddonGroupsConfig::default());
-    }
-    let input = fs::read_to_string(path)
-        .map_err(|error| format!("could not read addon groups: {error}"))?;
-    toml::from_str(&input).map_err(|error| format!("could not parse addon groups: {error}"))
+    crate::persistence::load(&config_path()?)
 }
 
 fn validate(groups: &[AddonGroup]) -> Result<(), String> {
@@ -138,8 +123,7 @@ fn default_group() -> AddonGroup {
 }
 
 fn config_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armasync/addon-groups.toml"))
+    crate::persistence::config_path("addon-groups.toml")
 }
 
 #[cfg(test)]

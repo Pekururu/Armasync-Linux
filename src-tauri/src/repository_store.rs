@@ -5,7 +5,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedRepository {
     pub id: String,
@@ -33,6 +33,7 @@ pub fn get(id: &str) -> Result<SavedRepository, String> {
 }
 
 pub fn add(name: String, url: String, destination: String) -> Result<Vec<SavedRepository>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let destination = validate_destination(&destination)?;
     let mut config = load()?;
     if config
@@ -57,6 +58,7 @@ pub fn add(name: String, url: String, destination: String) -> Result<Vec<SavedRe
 }
 
 pub fn update(id: &str, destination: String) -> Result<Vec<SavedRepository>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let destination = validate_destination(&destination)?;
     let mut config = load()?;
     let item = config
@@ -70,6 +72,7 @@ pub fn update(id: &str, destination: String) -> Result<Vec<SavedRepository>, Str
 }
 
 pub fn remove(id: &str) -> Result<Vec<SavedRepository>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     let before = config.repositories.len();
     config.repositories.retain(|item| item.id != id);
@@ -92,32 +95,13 @@ fn validate_destination(value: &str) -> Result<PathBuf, String> {
 }
 
 fn config_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armasync/repositories.toml"))
+    crate::persistence::config_path("repositories.toml")
 }
 
 fn load() -> Result<RepositoryConfig, String> {
-    let path = config_path()?;
-    if !path.exists() {
-        return Ok(RepositoryConfig::default());
-    }
-    let input = fs::read_to_string(&path)
-        .map_err(|error| format!("could not read repository settings: {error}"))?;
-    toml::from_str(&input).map_err(|error| format!("could not parse repository settings: {error}"))
+    crate::persistence::load(&config_path()?)
 }
 
 fn save(config: &RepositoryConfig) -> Result<(), String> {
-    let path = config_path()?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "invalid repository settings path".to_owned())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("could not create settings directory: {error}"))?;
-    let temporary = path.with_extension("toml.tmp");
-    let output = toml::to_string_pretty(config)
-        .map_err(|error| format!("could not encode repository settings: {error}"))?;
-    fs::write(&temporary, output)
-        .map_err(|error| format!("could not write repository settings: {error}"))?;
-    fs::rename(&temporary, &path)
-        .map_err(|error| format!("could not commit repository settings: {error}"))
+    crate::persistence::save(&config_path()?, config)
 }

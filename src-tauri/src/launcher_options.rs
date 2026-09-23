@@ -1,13 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::model::{LauncherEnvironment, LauncherOptionsView};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, ts_rs::TS)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SavedServer {
     pub id: String,
@@ -15,10 +12,11 @@ pub struct SavedServer {
     pub address: String,
     pub port: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub password: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, ts_rs::TS)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LauncherSettings {
     pub profile: Option<String>,
@@ -39,8 +37,10 @@ pub struct LauncherSettings {
     pub servers: Vec<SavedServer>,
     pub selected_server_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub server_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub server_port: Option<u16>,
     pub extra_arguments: Vec<String>,
 }
@@ -83,14 +83,8 @@ pub fn preview(settings: LauncherSettings) -> Result<LauncherOptionsView, String
 pub fn save(settings: LauncherSettings) -> Result<LauncherOptionsView, String> {
     validate(&settings)?;
     let path = config_path()?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "invalid launcher settings path".to_owned())?;
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let output = toml::to_string_pretty(&settings).map_err(|error| error.to_string())?;
-    let temporary = path.with_extension("toml.tmp");
-    fs::write(&temporary, output).map_err(|error| error.to_string())?;
-    fs::rename(&temporary, &path).map_err(|error| error.to_string())?;
+    let _lock = crate::persistence::lock(&path)?;
+    crate::persistence::save(&path, &settings)?;
     build_view(settings)
 }
 
@@ -99,13 +93,7 @@ pub fn reset() -> Result<LauncherOptionsView, String> {
 }
 
 pub(crate) fn load() -> Result<LauncherSettings, String> {
-    let path = config_path()?;
-    if !path.is_file() {
-        return Ok(LauncherSettings::default());
-    }
-    let input = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let mut settings: LauncherSettings = toml::from_str(&input)
-        .map_err(|error| format!("could not parse launcher settings: {error}"))?;
+    let mut settings: LauncherSettings = crate::persistence::load(&config_path()?)?;
     if settings.player_profiles.is_empty()
         && let Some(profile) = settings.profile.take()
     {
@@ -347,8 +335,7 @@ fn decode_profile_name(value: &str) -> Option<String> {
 }
 
 fn config_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/armasync/launcher.toml"))
+    crate::persistence::config_path("launcher.toml")
 }
 fn path_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()

@@ -94,3 +94,30 @@ Selectable DLC handles and Steam detection rules are documented in
 
 Addon directory persistence, priority, and bounded scan behavior are described
 in [`docs/ADDON_SOURCES.md`](docs/ADDON_SOURCES.md).
+
+## Development checks
+
+```sh
+pnpm version:check
+pnpm typecheck
+pnpm build
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml --locked
+```
+
+Rust models generate `src/bindings.ts`. After changing an IPC model, run
+`pnpm bindings`; tests reject stale bindings. Keep UI-only types in the frontend.
+`package.json` owns the release version: after bumping it, run `pnpm version:sync`
+and commit the Cargo manifest/lockfile and Tauri config updates. CI and release
+builds check that all versions agree.
+
+Repository code lives in `src-tauri/src/repository/`: `decoding` handles wire
+metadata, `transport` handles bounded network I/O, `planning` checks local files,
+`installation` handles staging and recovery, and `filesystem` confines disk I/O.
+Compatibility tests use reproducible synthetic fixtures in `src-tauri/tests/fixtures`.
+
+Configuration storage shares durable writes and file locks in `persistence.rs`.
+Settings use `$XDG_CONFIG_HOME/armasync` (or `~/.config/armasync`); existing files
+in the old default location remain readable until settings are saved to the new
+location. Relative XDG paths are ignored.

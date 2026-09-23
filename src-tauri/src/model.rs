@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryInfo {
     pub name: String,
@@ -12,7 +12,7 @@ pub struct RepositoryInfo {
     pub source_url: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositorySnapshot {
     pub repository: RepositoryInfo,
@@ -21,7 +21,7 @@ pub struct RepositorySnapshot {
     pub addons: Vec<AddonCatalogEntry>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifestSummary {
     pub directories: usize,
@@ -32,7 +32,7 @@ pub struct ManifestSummary {
     pub unhashed_files: usize,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedModset {
     pub name: String,
@@ -41,7 +41,7 @@ pub struct PublishedModset {
     pub userconfig_folders: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AddonCatalogEntry {
     pub id: String,
@@ -53,7 +53,7 @@ pub struct AddonCatalogEntry {
     pub duplicate_name: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPlan {
     pub requested_addons: Vec<String>,
@@ -69,7 +69,7 @@ pub struct SyncPlan {
     pub operations: Vec<SyncPlanItem>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPlanItem {
     pub action: SyncAction,
@@ -79,14 +79,14 @@ pub struct SyncPlanItem {
     pub final_bytes: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncAction {
     Download,
     Replace,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResult {
     pub installed_files: usize,
@@ -94,7 +94,7 @@ pub struct SyncResult {
     pub destination: String,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncPhase {
     Preparing,
@@ -102,7 +102,7 @@ pub enum SyncPhase {
     Installing,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncProgress {
     pub phase: SyncPhase,
@@ -115,7 +115,7 @@ pub struct SyncProgress {
 
 /// Emitted while verifying local files against the repository manifest.
 /// Hashing every file is slow enough that the UI must show movement.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckProgress {
     pub phase: CheckPhase,
@@ -126,7 +126,7 @@ pub struct CheckProgress {
     pub total_bytes: u64,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum CheckPhase {
     /// Fetching the repository's file list; no per-file counts yet.
@@ -134,7 +134,7 @@ pub enum CheckPhase {
     Verifying,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceRuntimeComponent {
     pub id: String,
@@ -142,7 +142,7 @@ pub struct VoiceRuntimeComponent {
     pub installed: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceStatus {
     pub game_directory: Option<String>,
@@ -166,7 +166,7 @@ pub struct VoiceStatus {
     pub notes: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeComponentResult {
     pub id: String,
@@ -175,7 +175,7 @@ pub struct RuntimeComponentResult {
     pub detail: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSetupResult {
     pub backup_archive: String,
@@ -184,7 +184,7 @@ pub struct RuntimeSetupResult {
     pub success: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallerLaunchResult {
     pub process_id: u32,
@@ -193,14 +193,14 @@ pub struct InstallerLaunchResult {
     pub log_file: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInstallResult {
     pub destination: String,
     pub backup: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RadioPluginStatus {
     pub id: String,
@@ -211,14 +211,14 @@ pub struct RadioPluginStatus {
     pub plugin_destination: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessLaunchResult {
     pub process_id: u32,
     pub log_file: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LauncherEnvironment {
     pub game_directory: Option<String>,
@@ -228,7 +228,7 @@ pub struct LauncherEnvironment {
     pub profiles: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LauncherOptionsView {
     pub settings: crate::launcher_options::LauncherSettings,
@@ -237,7 +237,7 @@ pub struct LauncherOptionsView {
     pub command_preview: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticStatus {
     Pass,
@@ -245,7 +245,7 @@ pub enum DiagnosticStatus {
     Fail,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticCheck {
     pub id: String,
@@ -255,7 +255,7 @@ pub struct DiagnosticCheck {
     pub detail: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticPath {
     pub id: String,
@@ -264,7 +264,7 @@ pub struct DiagnosticPath {
     pub available: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticLog {
     pub name: String,
@@ -273,7 +273,7 @@ pub struct DiagnosticLog {
     pub size: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PrefixBackup {
     pub name: String,
@@ -282,7 +282,7 @@ pub struct PrefixBackup {
     pub modified: Option<u64>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticReport {
     pub checks: Vec<DiagnosticCheck>,
@@ -291,21 +291,21 @@ pub struct DiagnosticReport {
     pub backups: Vec<PrefixBackup>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportBundle {
     pub archive: String,
     pub included_files: usize,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 pub enum LaunchAddonKind {
     Mod,
     Dlc,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchAddonInput {
     pub kind: LaunchAddonKind,

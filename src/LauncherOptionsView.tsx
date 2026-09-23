@@ -1,18 +1,8 @@
+export type { SavedServer, LauncherSettings, LauncherEnvironment, LauncherOptionsView as OptionsView } from "./bindings";
+import type { SavedServer, LauncherSettings, LauncherOptionsView as OptionsView } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
-
-export type SavedServer = { id: string; name: string; address: string; port: number; password: string | null };
-export type LauncherSettings = {
-  profile: string | null; noLauncher: boolean; noSplash: boolean;
-  skipIntro: boolean; noPause: boolean; showScriptErrors: boolean; worldEmpty: boolean;
-  filePatching: boolean; checkSignatures: boolean; enableHt: boolean; hugePages: boolean;
-  cpuCount: number | null; exThreads: number | null; maxMemory: number | null;
-  playerProfiles: string[]; servers: SavedServer[]; selectedServerId: string | null;
-  serverAddress?: string | null; serverPort?: number | null; extraArguments: string[];
-};
-export type LauncherEnvironment = { gameDirectory: string | null; executable: string | null; prefixDirectory: string | null; selectedProton: string | null; profiles: string[] };
-export type OptionsView = { settings: LauncherSettings; environment: LauncherEnvironment; arguments: string[]; commandPreview: string };
 
 function OIcon({ name }: { name: "save" | "reset" | "rocket" | "server" | "profile" | "advanced" | "check" }) {
   const paths = {

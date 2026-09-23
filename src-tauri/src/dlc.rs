@@ -74,7 +74,7 @@ const SELECTABLE_DLC: &[DlcDefinition] = &[
     },
 ];
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectedDlc {
     pub handle: String,
@@ -85,7 +85,7 @@ pub struct DetectedDlc {
     pub status: DlcStatus,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum DlcStatus {
     Installed,
@@ -95,7 +95,7 @@ pub enum DlcStatus {
     Unavailable,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DlcDetection {
     pub game_directory: Option<String>,

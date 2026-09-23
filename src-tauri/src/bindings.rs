@@ -1,0 +1,158 @@
+//! Rust is the source of truth for all serialized frontend models.
+#[cfg(test)]
+mod tests {
+    use ts_rs::TS;
+    #[test]
+    fn export_types() {
+        let config = ts_rs::Config::new().with_large_int("number");
+        let mut output =
+            String::from("// Generated from Rust. Run pnpm bindings; do not edit.\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::RepositoryInfo::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::RepositorySnapshot::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::ManifestSummary::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::PublishedModset::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::AddonCatalogEntry::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncPlan::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncPlanItem::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncAction::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncPhase::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SyncProgress::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::CheckProgress::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::CheckPhase::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::VoiceRuntimeComponent::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::VoiceStatus::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::RuntimeComponentResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::RuntimeSetupResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::InstallerLaunchResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::PluginInstallResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::RadioPluginStatus::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::ProcessLaunchResult::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::LauncherEnvironment::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::LauncherOptionsView::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::DiagnosticStatus::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::DiagnosticCheck::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::DiagnosticPath::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::DiagnosticLog::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::PrefixBackup::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::DiagnosticReport::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::SupportBundle::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::LaunchAddonKind::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::model::LaunchAddonInput::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::addon_groups::GroupSource::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::addon_groups::AddonGroup::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::launch_selection::LaunchSelection::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::launcher_options::SavedServer::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::launcher_options::LauncherSettings::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::repository_store::SavedRepository::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::sources::SourceKind::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::sources::SourceStatus::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::sources::AddonSource::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::sources::DiscoveredAddon::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::dlc::DetectedDlc::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::dlc::DlcStatus::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::dlc::DlcDetection::decl(&config));
+        output.push_str("\n\n");
+        output.push_str("export ");
+        output.push_str(&crate::diagnostics::HostDependency::decl(&config));
+        output.push_str("\n\n");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/bindings.ts");
+        if std::env::var_os("UPDATE_BINDINGS").is_some() {
+            std::fs::write(&path, &output).unwrap();
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap_or_default(),
+            output,
+            "IPC bindings are stale; run pnpm bindings"
+        );
+    }
+}

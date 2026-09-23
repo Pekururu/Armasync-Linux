@@ -1,20 +1,11 @@
+import type { SavedRepository, RepositorySnapshot, SyncPlan, SyncResult, CheckProgress, SyncProgress } from "./bindings";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { confirm, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type SavedRepository = { id: string; name: string; autoconfigUrl: string; destination: string };
-type RepositoryInfo = { name: string; protocol: string; host: string; port: number | null; anonymous: boolean; sourceUrl: string };
-type ManifestSummary = { directories: number; files: number; totalBytes: number; compressedFiles: number; addonRoots: number; unhashedFiles: number };
-type PublishedModset = { name: string; description: string; addons: string[]; userconfigFolders: string[] };
-type RepositoryAddon = { id: string; name: string; remotePath: string; files: number; totalBytes: number; transferBytes: number; duplicateName: boolean };
-type RepositorySnapshot = { repository: RepositoryInfo; manifest: ManifestSummary; publishedModsets: PublishedModset[]; addons: RepositoryAddon[] };
-type SyncOperation = { action: "download" | "replace"; addon: string; relativePath: string; transferBytes: number; finalBytes: number };
-type SyncPlan = { requestedAddons: string[]; resolvedAddons: string[]; missingAddons: string[]; ambiguousAddons: string[]; totalFiles: number; verifiedFiles: number; downloadFiles: number; replacementFiles: number; downloadBytes: number; finalBytes: number; operations: SyncOperation[] };
-type SyncResult = { installedFiles: number; downloadedBytes: number; destination: string };
-type CheckProgress = { phase: "metadata" | "verifying"; addon: string | null; checkedFiles: number; totalFiles: number; checkedBytes: number; totalBytes: number };
 type AddonState = "ok" | "changed" | "missing" | "unresolved";
 type AddonCheck = { state: AddonState; missing: number; changed: number; transferBytes: number };
-type SyncProgress = { phase: "preparing" | "downloading" | "installing"; downloadedBytes: number; totalBytes: number; completedFiles: number; totalFiles: number; currentFile: string | null };
+
 type AddonGroupSummary = { id: string; name: string; source?: { repositoryId: string; modsetName: string } | null };
 type ModsetApplyResult = { action: string; groupName: string; addonCount: number };
 
@@ -135,7 +126,9 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
   const selectedBytes = useMemo(() => snapshot?.addons.filter((item) => selectedAddons.has(item.name)).reduce((sum, item) => sum + item.totalBytes, 0) ?? 0, [snapshot, selectedAddons]);
   const linkedGroup = addonGroups.find((group) => group.source?.repositoryId === selectedId && group.source.modsetName === selectedModsetName) ?? null;
   const checkPercent = checkProgress?.totalFiles ? Math.min(100, Math.floor(checkProgress.checkedFiles / checkProgress.totalFiles * 100)) : 0;
-  const syncPercent = syncProgress?.totalBytes ? Math.min(100, Math.floor(syncProgress.downloadedBytes / syncProgress.totalBytes * 100)) : 0;
+  const syncPercent = syncProgress?.phase === "installing"
+    ? (syncProgress.totalFiles ? Math.floor(syncProgress.completedFiles / syncProgress.totalFiles * 100) : 100)
+    : syncProgress?.totalBytes ? Math.min(100, Math.floor(syncProgress.downloadedBytes / syncProgress.totalBytes * 100)) : 0;
 
   useEffect(() => { void loadRepositories(); }, []);
   useEffect(() => { if (!destination && defaultDestination) setDestination(defaultDestination); }, [defaultDestination, destination]);
@@ -219,15 +212,18 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
     } catch (cause) { setError(String(cause)); }
   }
 
-  async function checkFiles(scope?: string[]) {
+  async function checkFiles(scope?: string[], fullVerification = false) {
     const targets = scope ?? (pendingAddons.length > 0 ? pendingAddons : [...selectedAddons]);
     if (!selectedId || targets.length === 0) return;
-    setBusy("check"); setError(null); setResult(null);
+    setBusy("check"); setError(null); setResult(null); setSyncMessage(null);
+    stopRequested.current = false;
+    const jobId = crypto.randomUUID();
+    setSyncJobId(jobId); setSyncStopping(false);
     const progress = new Channel<CheckProgress>();
     progress.onmessage = (update) => setCheckProgress(update);
     setCheckProgress({ phase: "metadata", addon: null, checkedFiles: 0, totalFiles: 0, checkedBytes: 0, totalBytes: 0 });
     try {
-      const plan = await invoke<SyncPlan>("check_repository_files", { id: selectedId, selectedAddons: targets, onProgress: progress });
+      const plan = await invoke<SyncPlan>("check_repository_files", { id: selectedId, selectedAddons: targets, fullVerification, jobId, onProgress: progress });
       setChecked((current) => {
         const next = new Map(current);
         // Everything asked for starts clean, then the plan's operations fill in
@@ -246,15 +242,18 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
         return next;
       });
     }
-    catch (cause) { setError(String(cause)); }
-    finally { setBusy(null); setCheckProgress(null); }
+    catch (cause) {
+      if (stopRequested.current) setSyncMessage("File check stopped.");
+      else setError(String(cause));
+    }
+    finally { setBusy(null); setCheckProgress(null); setSyncJobId(null); setSyncStopping(false); }
   }
 
   async function synchronize() {
     if (!selectedId || summary.transferFiles === 0) return;
     const jobId = crypto.randomUUID();
     const progress = new Channel<SyncProgress>();
-    progress.onmessage = (update) => setSyncProgress((current) => update.totalBytes ? update : {
+    progress.onmessage = (update) => setSyncProgress((current) => update.phase !== "preparing" ? update : {
       ...update,
       totalBytes: current?.totalBytes ?? summary.downloadBytes,
       totalFiles: current?.totalFiles ?? summary.transferFiles,
@@ -276,7 +275,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
     } catch (cause) {
       const message = String(cause);
       if (stopRequested.current || message.toLocaleLowerCase().includes("synchronization stopped")) {
-        setSyncMessage("Synchronization stopped. Incomplete files were discarded.");
+        setSyncMessage("Synchronization stopped. Verified downloads are saved; synchronize again to resume.");
       } else {
         setError(message);
       }
@@ -313,12 +312,12 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
       <aside className="repository-rail">
         <header><div><strong>Saved repositories</strong><span>{repositories.length} configured</span></div><button type="button" title="Add repository" onClick={() => { setShowAdd(true); setError(null); }}><RepoIcon name="plus"/></button></header>
         <div className="repository-list">
-          {repositories.map((item) => <button type="button" key={item.id} className={`repository-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => { setSelectedId(item.id); setSnapshot(null); setChecked(new Map()); setResult(null); setError(null); }}>
+          {repositories.map((item) => <button type="button" key={item.id} disabled={busy !== null} className={`repository-card ${selectedId === item.id ? "selected" : ""}`} onClick={() => { setSelectedId(item.id); setSnapshot(null); setChecked(new Map()); setResult(null); setError(null); }}>
             <span className="repository-card-icon"><RepoIcon name="repository"/></span><span className="repository-card-copy"><strong>{item.name}</strong><small>{new URL(item.autoconfigUrl).host}</small></span><span className={`status-dot ${snapshot && selectedId === item.id ? "" : "idle"}`}/>
           </button>)}
           {!repositories.length && <div className="repository-rail-empty">No repositories configured yet.</div>}
         </div>
-        {selectedRepository && <footer><button type="button" className="rail-connect" disabled={busy !== null} onClick={() => void connect()}><RepoIcon name="link"/>{busy === "connect" ? "Connecting…" : snapshot ? "Reconnect" : "Connect"}</button><button type="button" title="Remove repository" onClick={() => void removeRepository()}><RepoIcon name="trash"/></button></footer>}
+        {selectedRepository && <footer><button type="button" className="rail-connect" disabled={busy !== null} onClick={() => void connect()}><RepoIcon name="link"/>{busy === "connect" ? "Connecting…" : snapshot ? "Reconnect" : "Connect"}</button><button type="button" disabled={busy !== null} title="Remove repository" onClick={() => void removeRepository()}><RepoIcon name="trash"/></button></footer>}
       </aside>
 
       <section className="repository-stage">
@@ -334,6 +333,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
             <div className="repository-addon-list"><div className="repository-column-labels"><span>Repository content</span><span>Files / size</span></div>{snapshot.addons.map((addon) => <label className={`repository-addon-row ${selectedAddons.has(addon.name) ? "selected" : ""}`} key={addon.id}><input type="checkbox" checked={selectedAddons.has(addon.name)} onChange={() => { const next = new Set(selectedAddons); next.has(addon.name) ? next.delete(addon.name) : next.add(addon.name); setSelectedAddons(next); }}/><span><strong title={addon.name}>{addon.name}</strong><small title={addon.remotePath}>{addon.remotePath}</small></span><span className="repository-addon-meta">{(() => { const state = addonStates.get(addon.name); return state ? <AddonMark state={state.state} missing={state.missing} changed={state.changed}/> : null; })()}<span>{addon.files.toLocaleString()} · {bytes(addon.totalBytes)}</span></span>{addon.duplicateName && <i title="This addon name occurs more than once">!</i>}</label>)}</div>
             <aside className="repository-check-panel">
               {checkProgress && <div className="repository-sync-progress">
+                <button className="button" type="button" disabled={syncStopping} onClick={() => void stopSync()}>{syncStopping ? "Stopping…" : "Stop check"}</button>
                 <div className="sync-progress-heading"><strong>{checkProgress.phase === "metadata" ? "Reading repository file list…" : "Checking installed files…"}</strong><span>{checkProgress.phase === "metadata" ? "" : `${checkPercent}%`}</span></div>
                 <div className={`sync-progress-track ${checkProgress.phase === "metadata" ? "indeterminate" : ""}`} role="progressbar" aria-label="Checking installed files" aria-valuemin={0} aria-valuemax={100} aria-valuenow={checkPercent}><span style={{ width: checkProgress.phase === "metadata" ? "100%" : `${checkPercent}%` }}/></div>
                 <div className="sync-progress-stats"><span>{checkProgress.totalFiles ? `${checkProgress.checkedFiles.toLocaleString()} / ${checkProgress.totalFiles.toLocaleString()} files` : "Contacting repository"}</span><span>{checkProgress.addon ?? ""}</span></div>
@@ -354,7 +354,7 @@ export default function RepositoryView({ active, defaultDestination, addonGroups
                     : <p>Compare selected repository files with the destination using size and SHA-1 hashes.</p>}
                   {syncMessage && <p className="repository-sync-message">{syncMessage}</p>}
                 </div>
-                <div className="check-actions"><button className="button" type="button" disabled={busy !== null || selectedAddons.size === 0} onClick={() => void checkFiles(pendingAddons.length > 0 ? undefined : [...selectedAddons])}><RepoIcon name="check"/>{busy === "check" ? "Checking…" : pendingAddons.length === 0 && hasCheckedSelection ? "Re-check all" : hasCheckedSelection ? `Check ${pendingAddons.length} new` : "Check files"}</button>{summary.transferFiles > 0 && <button className="button primary-small" type="button" disabled={busy !== null || summary.unresolved.length > 0} onClick={() => void synchronize()}><RepoIcon name="download"/>{busy === "sync" ? "Synchronizing…" : "Synchronize"}</button>}</div>
+                <div className="check-actions"><button className="button" type="button" disabled={busy !== null || selectedAddons.size === 0} onClick={() => void checkFiles(pendingAddons.length > 0 ? undefined : [...selectedAddons])}><RepoIcon name="check"/>{busy === "check" ? "Checking…" : pendingAddons.length === 0 && hasCheckedSelection ? "Re-check all" : hasCheckedSelection ? `Check ${pendingAddons.length} new` : "Check files"}</button><button className="button" type="button" disabled={busy !== null || selectedAddons.size === 0} title="Read and hash every selected file, bypassing cached results" onClick={() => void checkFiles([...selectedAddons], true)}>Full verification</button>{summary.transferFiles > 0 && <button className="button primary-small" type="button" disabled={busy !== null || summary.unresolved.length > 0} onClick={() => void synchronize()}><RepoIcon name="download"/>{busy === "sync" ? "Synchronizing…" : "Synchronize"}</button>}</div>
               </div>
             </aside>
           </div>

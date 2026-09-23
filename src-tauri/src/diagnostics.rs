@@ -476,7 +476,7 @@ fn timestamp() -> Result<u64, String> {
 
 /// A host tool the launcher shells out to, checked by PATH lookup only —
 /// nothing is executed, so probing is safe at startup.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct HostDependency {
     pub id: String,

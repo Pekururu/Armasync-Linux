@@ -1,22 +1,9 @@
+import type { VoiceStatus, RuntimeSetupResult as RuntimeResult, InstallerLaunchResult as InstallerResult, PluginInstallResult as PluginResult } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 
-type RuntimeComponent = { id: string; label: string; installed: boolean };
-type RadioPlugin = { id: string; label: string; modDirectory: string | null; pluginSource: string | null; pluginInstalled: boolean; pluginDestination: string | null };
-type VoiceStatus = {
-  gameDirectory: string | null; prefixDirectory: string | null; prefixInitialized: boolean;
-  protontricksAvailable: boolean; protontricksLaunchAvailable: boolean; pipewireAvailable: boolean;
-  teamspeakExecutable: string | null; teamspeakInstalled: boolean; teamspeakRunning: boolean;
-  pluginDirectory: string | null; cbaDirectory: string | null;
-  radioPlugins: RadioPlugin[];
-  darkThemeInstalled: boolean; darkThemePath: string | null;
-  runtimeComponents: RuntimeComponent[]; ready: boolean; notes: string[];
-};
-type RuntimeResult = { backupArchive: string; logFile: string; components: Array<{ id: string; label: string; success: boolean; detail: string }>; success: boolean };
-type InstallerResult = { processId: number; backupArchive: string; installer: string; logFile: string };
-type PluginResult = { destination: string; backup: string | null };
 type VoiceAction = "runtime" | "install" | "plugin" | "refresh" | "theme";
 
 function VIcon({ name }: { name: "check" | "warning" | "refresh" | "play" | "download" | "folder" | "tools" }) {
@@ -96,7 +83,6 @@ export default function VoiceView({ active }: { active: boolean }) {
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(null); }
   }
-
 
   async function changeDarkTheme(remove = false) {
     setBusy("theme"); setError(null); setNotice(null);

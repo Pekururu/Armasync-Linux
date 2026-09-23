@@ -1,6 +1,6 @@
 [package]
 name = "armasync"
-version = "0.3.0"
+version = "0.5.0"
 description = "A native Linux Arma 3 launcher and addon manager"
 authors = ["Armasync contributors"]
 license = "GPL-3.0-only"
@@ -33,3 +33,6 @@ thiserror = "2"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "time"] }
 url = "2"
 walkdir = "2"
+rustix = { version = "1", features = ["fs"] }
+tempfile = "3"
+ts-rs = { version = "12", features = ["no-serde-warnings"] }

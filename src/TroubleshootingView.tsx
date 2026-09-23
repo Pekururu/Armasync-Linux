@@ -1,16 +1,8 @@
+import type { DiagnosticCheck as Check, DiagnosticReport as Report, SupportBundle as Bundle, RuntimeSetupResult as Repair } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useState } from "react";
-
-type Status = "pass" | "warning" | "fail";
-type Check = { id: string; label: string; status: Status; summary: string; detail: string };
-type DPath = { id: string; label: string; path: string; available: boolean };
-type DLog = { name: string; path: string; modified: number | null; size: number };
-type Backup = { name: string; path: string; size: number; modified: number | null };
-type Report = { checks: Check[]; paths: DPath[]; logs: DLog[]; backups: Backup[] };
-type Bundle = { archive: string; includedFiles: number };
-type Repair = { success: boolean; logFile: string; components: Array<{ detail: string }> };
 
 function TIcon({ name }: { name: "refresh" | "bundle" | "folder" | "log" | "backup" | "repair" | "check" | "warning" | "fail" }) {
   const paths = { refresh: <><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></>, bundle: <><path d="m12 3 8 5-8 5-8-5z"/><path d="m4 12 8 5 8-5m-16 4 8 5 8-5"/></>, folder: <path d="M3 7.5h7l2-2h9v13H3z"/>, log: <><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6"/></>, backup: <><path d="M12 6a7 7 0 1 1-6.2 3.8"/><path d="M3 5v5h5M12 9v4l3 2"/></>, repair: <><path d="m14 6 4-2 2 2-2 4-3 1-5 9-3-2 5-8z"/><path d="m5 5 4 4"/></>, check: <path d="m5 12 4 4L19 6"/>, warning: <><path d="m12 3 9 17H3z"/><path d="M12 9v4m0 3h.01"/></>, fail: <><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></> };

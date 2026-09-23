@@ -66,15 +66,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Sync version into tauri.conf.json and Cargo.toml
-        env:
-          VERSION: ${{ needs.check-version.outputs.version }}
+      - name: Verify versions and backend
         run: |
-          jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
-          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
-          awk -v ver="$VERSION" '!done && /^version = / { sub(/version = ".*"/, "version = \"" ver "\""); done=1 } 1' \
-            src-tauri/Cargo.toml > src-tauri/Cargo.toml.tmp
-          mv src-tauri/Cargo.toml.tmp src-tauri/Cargo.toml
+          pnpm version:check
+          cargo test --manifest-path src-tauri/Cargo.toml --locked
 
       - name: Build and upload release
         uses: tauri-apps/tauri-action@v0

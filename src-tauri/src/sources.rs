@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
     Game,
@@ -29,7 +29,7 @@ struct SourcesConfig {
     sources: Vec<StoredSource>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceStatus {
     Ready,
@@ -38,7 +38,7 @@ pub enum SourceStatus {
     Unreadable,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AddonSource {
     pub id: String,
@@ -50,7 +50,7 @@ pub struct AddonSource {
     pub addon_count: usize,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredAddon {
     pub id: String,
@@ -64,6 +64,7 @@ pub struct DiscoveredAddon {
 }
 
 pub fn list() -> Result<Vec<AddonSource>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     let changed = remove_legacy_automatic_sources(&mut config.sources);
     if changed {
@@ -73,6 +74,7 @@ pub fn list() -> Result<Vec<AddonSource>, String> {
 }
 
 pub fn add(path: &str) -> Result<Vec<AddonSource>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let requested = Path::new(path);
     if !requested.is_absolute() {
         return Err("addon search directory must be an absolute path".into());
@@ -116,6 +118,7 @@ pub fn add(path: &str) -> Result<Vec<AddonSource>, String> {
         enabled: true,
     });
     save(&config)?;
+    drop(_config_lock);
     list()
 }
 
@@ -129,6 +132,7 @@ pub fn add_workshop() -> Result<Vec<AddonSource>, String> {
 }
 
 pub fn catalog() -> Result<Vec<DiscoveredAddon>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     if remove_legacy_automatic_sources(&mut config.sources) {
         save(&config)?;
@@ -184,7 +188,10 @@ fn repository_destination_roots() -> Vec<PathBuf> {
 }
 
 fn addon_is_repository(kind: SourceKind, canonical: &Path, repository_roots: &[PathBuf]) -> bool {
-    kind == SourceKind::Custom && repository_roots.iter().any(|root| canonical.starts_with(root))
+    kind == SourceKind::Custom
+        && repository_roots
+            .iter()
+            .any(|root| canonical.starts_with(root))
 }
 
 fn addon_identity(kind: SourceKind, workshop_id: Option<u64>, path: &Path) -> String {
@@ -198,6 +205,7 @@ fn addon_identity(kind: SourceKind, workshop_id: Option<u64>, path: &Path) -> St
 }
 
 pub fn set_enabled(id: &str, enabled: bool) -> Result<Vec<AddonSource>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     remove_legacy_automatic_sources(&mut config.sources);
     let source = config
@@ -207,10 +215,12 @@ pub fn set_enabled(id: &str, enabled: bool) -> Result<Vec<AddonSource>, String> 
         .ok_or_else(|| "addon source was not found".to_owned())?;
     source.enabled = enabled;
     save(&config)?;
+    drop(_config_lock);
     list()
 }
 
 pub fn remove(id: &str) -> Result<Vec<AddonSource>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     remove_legacy_automatic_sources(&mut config.sources);
     if !config.sources.iter().any(|source| source.id == id) {
@@ -218,10 +228,12 @@ pub fn remove(id: &str) -> Result<Vec<AddonSource>, String> {
     }
     config.sources.retain(|source| source.id != id);
     save(&config)?;
+    drop(_config_lock);
     list()
 }
 
 pub fn reorder(ids: &[String]) -> Result<Vec<AddonSource>, String> {
+    let _config_lock = crate::persistence::lock(&config_path()?)?;
     let mut config = load()?;
     remove_legacy_automatic_sources(&mut config.sources);
     let current: HashSet<&str> = config
@@ -245,6 +257,7 @@ pub fn reorder(ids: &[String]) -> Result<Vec<AddonSource>, String> {
         })
         .collect();
     save(&config)?;
+    drop(_config_lock);
     list()
 }
 
@@ -399,38 +412,15 @@ fn same_path(left: &Path, right: &Path) -> bool {
 }
 
 fn config_path() -> Result<PathBuf, String> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .ok_or_else(|| "could not determine the user configuration directory".to_owned())?;
-    Ok(base.join("armasync/config.toml"))
+    crate::persistence::config_path("config.toml")
 }
 
 fn load() -> Result<SourcesConfig, String> {
-    let path = config_path()?;
-    if !path.is_file() {
-        return Ok(SourcesConfig::default());
-    }
-    let contents = fs::read_to_string(&path)
-        .map_err(|error| format!("could not read {}: {error}", path.display()))?;
-    toml::from_str(&contents)
-        .map_err(|error| format!("could not parse {}: {error}", path.display()))
+    crate::persistence::load(&config_path()?)
 }
 
 fn save(config: &SourcesConfig) -> Result<(), String> {
-    let path = config_path()?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "invalid configuration path".to_owned())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-    let contents = toml::to_string_pretty(config)
-        .map_err(|error| format!("could not serialize addon sources: {error}"))?;
-    let temporary = path.with_extension("toml.tmp");
-    fs::write(&temporary, contents)
-        .map_err(|error| format!("could not write {}: {error}", temporary.display()))?;
-    fs::rename(&temporary, &path)
-        .map_err(|error| format!("could not replace {}: {error}", path.display()))
+    crate::persistence::save(&config_path()?, config)
 }
 
 #[cfg(test)]

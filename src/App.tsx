@@ -1,3 +1,4 @@
+import type { HostDependency, VoiceStatus, DlcStatus, DetectedDlc, DlcDetection, AddonSource, DiscoveredAddon, AddonGroup, LaunchSelection } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -21,44 +22,6 @@ import LauncherOptionsView, { type OptionsView } from "./LauncherOptionsView";
 import TroubleshootingView from "./TroubleshootingView";
 import appIconUrl from "../src-tauri/icons/icon.png";
 
-type DlcStatus = "installed" | "disabled" | "files_only" | "incomplete" | "unavailable";
-
-type DetectedDlc = {
-  handle: string;
-  name: string;
-  appId: number;
-  directory: string | null;
-  creatorDlc: boolean;
-  status: DlcStatus;
-};
-
-type DlcDetection = {
-  gameDirectory: string | null;
-  manifestPath: string | null;
-  dlcs: DetectedDlc[];
-};
-
-type AddonSource = {
-  id: string;
-  name: string;
-  path: string;
-  kind: "game" | "workshop" | "custom";
-  enabled: boolean;
-  status: "ready" | "disabled" | "missing" | "unreadable";
-  addonCount: number;
-};
-
-type DiscoveredAddon = {
-  id: string;
-  name: string;
-  folder: string;
-  path: string;
-  sourceKind: AddonSource["kind"];
-  sourceId: string;
-  workshopId: number | null;
-  isRepository: boolean;
-};
-
 type Addon = {
   id: string;
   name: string;
@@ -73,19 +36,6 @@ type Addon = {
   workshopId?: number;
 };
 
-type AddonGroup = {
-  id: string;
-  name: string;
-  addonIds: string[];
-  source?: { repositoryId: string; modsetName: string } | null;
-};
-
-type LaunchSelection = {
-  activeAddonGroupId: string | null;
-  selectedServerId: string | null;
-  playerProfile: string | null;
-};
-
 type DragPayload = {
   addonId: string;
   origin: "installed" | "group";
@@ -97,7 +47,6 @@ type ContextMenuState = {
   x: number;
   y: number;
 };
-
 
 const initialGroups: AddonGroup[] = [
   { id: "default", name: "Default", addonIds: [], source: null },
@@ -301,7 +250,7 @@ export default function App() {
   const [missingDeps, setMissingDeps] = useState<Array<{ id: string; label: string; purpose: string; hint: string }>>([]);
   const [depsDismissed, setDepsDismissed] = useState(false);
   useEffect(() => {
-    void invoke<Array<{ id: string; label: string; purpose: string; installed: boolean; hint: string }>>("host_dependencies")
+    void invoke<HostDependency[]>("host_dependencies")
       .then((deps) => setMissingDeps(deps.filter((dep) => !dep.installed)))
       .catch(() => undefined);
   }, []);
@@ -312,7 +261,7 @@ export default function App() {
   const [teamspeakError, setTeamspeakError] = useState<string | null>(null);
 
   useEffect(() => {
-    const refreshInstalled = () => void invoke<{ teamspeakInstalled: boolean; teamspeakRunning: boolean }>("get_voice_status")
+    const refreshInstalled = () => void invoke<VoiceStatus>("get_voice_status")
       .then((voice) => { setTeamspeakInstalled(voice.teamspeakInstalled); setTeamspeakRunning(voice.teamspeakRunning); })
       .catch(() => undefined);
     refreshInstalled();
@@ -679,7 +628,6 @@ export default function App() {
     });
     setPlayerProfile((current) => !current || next.settings.playerProfiles.includes(current) ? current : "");
   }, []);
-
 
   async function applyRepositoryModset(repositoryId: string, destination: string, modsetName: string, addonNames: string[]) {
     const addonIds = addonNames.flatMap((name) => {

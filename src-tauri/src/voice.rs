@@ -7,9 +7,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 use crate::model::{
-    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult,
-    RadioPluginStatus, RuntimeComponentResult, RuntimeSetupResult, VoiceRuntimeComponent,
-    VoiceStatus,
+    InstallerLaunchResult, PluginInstallResult, ProcessLaunchResult, RadioPluginStatus,
+    RuntimeComponentResult, RuntimeSetupResult, VoiceRuntimeComponent, VoiceStatus,
 };
 
 const APP_ID: &str = "107410";
@@ -127,8 +126,8 @@ pub fn status() -> VoiceStatus {
         .iter()
         .filter(|radio| radio.mod_directory.is_some())
         .collect();
-    let radios_connected = !detected_radios.is_empty()
-        && detected_radios.iter().all(|radio| radio.plugin_installed);
+    let radios_connected =
+        !detected_radios.is_empty() && detected_radios.iter().all(|radio| radio.plugin_installed);
     let dark_theme_path = prefix_directory.as_deref().map(dark_theme_path);
     let dark_theme_installed = dark_theme_path.as_ref().is_some_and(|path| path.is_file());
     let protontricks_available = command_exists("protontricks");
@@ -157,7 +156,8 @@ pub fn status() -> VoiceStatus {
         notes.push("Install Windows TeamSpeak 3.6.2 for all users in Arma's prefix.".into());
     }
     if detected_radios.is_empty() {
-        notes.push("No radio mod (ACRE2 or TFAR) was found in the configured addon sources.".into());
+        notes
+            .push("No radio mod (ACRE2 or TFAR) was found in the configured addon sources.".into());
     }
     if cba_directory.is_none() {
         notes.push("CBA_A3 was not found; ACRE2 and TFAR require it.".into());
@@ -176,9 +176,7 @@ pub fn status() -> VoiceStatus {
         }
     }
     if !pipewire_available {
-        notes.push(
-            "Install PipeWire audio: pacman -S wireplumber pipewire pipewire-pulse.".into(),
-        );
+        notes.push("Install PipeWire audio: pacman -S wireplumber pipewire pipewire-pulse.".into());
     }
     let ready = prefix_initialized
         && protontricks_launch_available
