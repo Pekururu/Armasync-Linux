@@ -112,6 +112,16 @@ Rust models generate `src/bindings.ts`. After changing an IPC model, run
 and commit the Cargo manifest/lockfile and Tauri config updates. CI and release
 builds check that all versions agree.
 
+Releases run each Tuesday at 18:00 Europe/Amsterdam (including daylight saving
+changes), or manually through the Release workflow on `main`. GitHub may delay
+scheduled runs. A lightweight check skips the build and AUR publication when
+there are no new commits since the latest published stable release. An explicit
+unreleased version is preserved; otherwise the workflow bumps the patch version,
+synchronizes the manifests, and commits the bump to `main` before building that
+exact commit. The workflow token therefore needs permission to push to `main`.
+A failed build can be retried manually. AUR publication runs only after a
+successful release and still requires the AUR credentials to be configured.
+
 Repository code lives in `src-tauri/src/repository/`: `decoding` handles wire
 metadata, `transport` handles bounded network I/O, `planning` checks local files,
 `installation` handles staging and recovery, and `filesystem` confines disk I/O.

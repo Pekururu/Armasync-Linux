@@ -1,19 +1,22 @@
 name: Publish to AUR
 
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      commit:
+        required: true
+        type: string
 
 jobs:
   publish_aur_bin:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.commit }}
 
       # Skips gracefully until the AUR account + repo secrets are set up.
       - name: Check AUR credentials are configured
@@ -28,21 +31,12 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Get version from latest GitHub release
-        if: steps.creds.outputs.configured == 'true'
-        id: version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag=$(gh release view --repo ${{ github.repository }} --json tagName -q .tagName)
-          version="${tag#v}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "Publishing armasync-bin ${version} to AUR"
-
       - name: Generate PKGBUILD
         if: steps.creds.outputs.configured == 'true'
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          sed "s/VERSION_PLACEHOLDER/${{ steps.version.outputs.version }}/" \
+          sed "s/VERSION_PLACEHOLDER/${RELEASE_VERSION}/" \
               aur/PKGBUILD-bin.template > PKGBUILD
           cat PKGBUILD
 
@@ -55,5 +49,5 @@ jobs:
           commit_username: ${{ vars.AUR_USERNAME }}
           commit_email: ${{ vars.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to v${{ steps.version.outputs.version }}"
+          commit_message: "Update to v${{ inputs.version }}"
           updpkgsums: true

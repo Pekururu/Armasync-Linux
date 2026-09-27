@@ -2,34 +2,81 @@ name: Release
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 2"
+      timezone: Europe/Amsterdam
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   check-version:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
       version: ${{ steps.check.outputs.version }}
+      commit: ${{ steps.check.outputs.commit }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Release only if package.json version has no tag yet
+      - name: Install Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+
+      - name: Check commits and prepare release version
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(jq -r .version package.json)
-          tag="v${version}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag ${tag} already exists, skipping release"
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Tag ${tag} does not exist, will release"
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          # Listing releases distinguishes an empty repository from API failures.
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' | sed -n '1p')
+          if [ -n "$latest" ]; then
+            git rev-parse --verify "refs/tags/$latest^{commit}"
+            if [ "$(git rev-list --count "refs/tags/$latest..HEAD")" -eq 0 ]; then
+              echo "No commits since $latest; skipping release"
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
+
+          # Keep an explicit version bump; otherwise advance past existing tags.
+          version=$(node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const tags = new Set(execFileSync('git', ['tag', '--list'], { encoding: 'utf8' }).trim().split('\n'));
+          if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) throw new Error('Stable releases require a major.minor.patch version');
+          const original = pkg.version;
+          while (tags.has(`v${pkg.version}`)) {
+            const [major, minor, patch] = pkg.version.split('.').map(Number);
+            pkg.version = `${major}.${minor}.${patch + 1}`;
+          }
+          if (pkg.version !== original) writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          console.log(pkg.version);
+          JS
+          )
+          node scripts/version.mjs
+          node scripts/version.mjs --check
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
+            git commit -m "Bump version to $version"
+            # A concurrent push to main fails safely instead of overwriting it.
+            git push origin HEAD:main
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   build:
     needs: check-version
@@ -37,6 +84,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check-version.outputs.commit }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -77,7 +126,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: "true"
         with:
+          releaseCommitish: ${{ needs.check-version.outputs.commit }}
           tagName: v${{ needs.check-version.outputs.version }}
           releaseName: v${{ needs.check-version.outputs.version }}
           releaseDraft: false
           prerelease: false
+
+  publish-aur:
+    needs: [check-version, build]
+    uses: ./.github/workflows/publish-aur.yml
+    with:
+      version: ${{ needs.check-version.outputs.version }}
+      commit: ${{ needs.check-version.outputs.commit }}
+    secrets: inherit
