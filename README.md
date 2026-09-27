@@ -13,7 +13,7 @@
 [![AUR](https://img.shields.io/aur/version/armasync-bin?style=flat-square&label=AUR&color=f0b44c&labelColor=262626)](https://aur.archlinux.org/packages/armasync-bin)
 [![License](https://img.shields.io/badge/license-GPL--3.0-f0b44c?style=flat-square&labelColor=262626)](LICENSE)
 
-[Install](#install) · [Getting started](#getting-started) · [Game day](#game-day) · [When something goes wrong](#when-something-goes-wrong)
+[Install](#install) · [Getting started](#getting-started) · [Game day](#game-day) · [When something goes wrong](#when-something-goes-wrong) · [Known limitations](#known-limitations)
 
 </div>
 
@@ -91,8 +91,8 @@ to download.
 Open Armasync. **Play** shows whether you're ready and what's in the way, each
 with a button to fix it.
 
-1. Press **Check** next to your repository. If your unit changed mods,
-   Play says so.
+1. Open **Repos** and press **Check Now** on your repository. If your unit
+   changed mods, Play says so.
 2. Start TeamSpeak from Play or Voice and join your unit's TeamSpeak server.
 3. Check the addon group, server and profile, then press **Launch**. If there's
    an update, press **Update And Launch** to download it first.
@@ -148,6 +148,22 @@ first.
 > recent logs, the newest Arma log and your launch settings to your Downloads
 > folder in one file. Server passwords are blanked out, and repository logins
 > and your TeamSpeak identity aren't included.
+
+## Known limitations
+
+These are being worked on for v0.6.0.
+
+- **Compressed repositories don't sync yet.** If your unit builds its
+  repository with Arma3Sync's compression option, the sync stops with
+  "compressed repository entry is not supported yet". Checking still works.
+- **Changed files download whole.** Arma3Sync can download only the parts of a
+  file that changed. Armasync downloads the whole file again, so a small patch
+  to a big mod takes as long as the first download.
+- **Updates aren't checked on their own.** Nothing checks in the background.
+  Open **Repos** and press **Check Now** to see whether your unit changed mods.
+- **Armasync doesn't know when Arma is running.** Launch works a second time,
+  and a sync can start while the game has the mods open. Close Arma before you
+  sync.
 
 ## Planned
 
