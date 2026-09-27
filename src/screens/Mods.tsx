@@ -18,15 +18,21 @@ const sourceFilters: { value: SourceFilter; label: string }[] = [
   { value: "DLC", label: "DLC" },
 ];
 
-/** Moves focus between rows of a list with the arrow keys. */
+/** Moves focus between rows of a list with the arrow keys, Home and End. Alt is left for moving rows. */
 function arrowNavigation(event: KeyboardEvent<HTMLElement>) {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
   const rows = [...event.currentTarget.querySelectorAll<HTMLElement>("[role='option']")];
   const index = rows.indexOf(document.activeElement as HTMLElement);
-  const next = rows[index + (event.key === "ArrowDown" ? 1 : -1)];
+  const next = event.key === "ArrowDown" ? rows[index + 1] : event.key === "ArrowUp" ? rows[index - 1]
+    : event.key === "Home" ? rows[0] : event.key === "End" ? rows[rows.length - 1] : undefined;
   if (!next) return;
   event.preventDefault();
   next.focus();
+}
+
+/** Shift+F10 and the Menu key open a row's context menu, placed on the row. */
+function isMenuKey(event: KeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
 }
 
 export default function Mods({ catalog, groups, repositories, onOpenSources }: { catalog: Catalog; groups: Groups; repositories: SavedRepository[]; onOpenSources: () => void }) {
@@ -38,6 +44,7 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
   const [editor, setEditor] = useState<{ mode: "create" | "rename" | "duplicate"; value: string } | null>(null);
   const [context, setContext] = useState<{ addonId: string; origin: Origin; x: number; y: number } | null>(null);
   const [target, setTarget] = useState<Target>(null);
+  const [announcement, setAnnouncement] = useState("");
   const installedCard = useRef<HTMLDivElement>(null);
   const groupCard = useRef<HTMLDivElement>(null);
   const groupList = useRef<HTMLDivElement>(null);
@@ -63,6 +70,42 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
     if (!id) return;
     updateActiveGroup((ids) => ids.filter((addonId) => addonId !== id));
     setGroupSelection(null);
+  }
+
+  /** Moves a group row from the keyboard, keeps focus on it and says where it went. */
+  function moveByKey(addon: Addon, index: number) {
+    const count = activeGroup.addonIds.length;
+    const place = Math.max(0, Math.min(index, count - 1));
+    if (place === activeGroup.addonIds.indexOf(addon.id)) return;
+    moveTo(addon.id, place > activeGroup.addonIds.indexOf(addon.id) ? place + 1 : place);
+    setAnnouncement(`${addon.label} moved to ${place + 1} of ${count}`);
+    requestAnimationFrame(() => {
+      const row = groupList.current?.querySelector<HTMLElement>(`[data-addon-id="${CSS.escape(addon.id)}"]`);
+      row?.focus({ preventScroll: true });
+      row?.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function groupRowKey(event: KeyboardEvent<HTMLElement>, addon: Addon, index: number) {
+    if (fromControl(event)) return;
+    const last = activeGroup.addonIds.length - 1;
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: last };
+    if (event.altKey && event.key in moves) {
+      event.preventDefault();
+      moveByKey(addon, moves[event.key]);
+    } else if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      remove(addon.id);
+      setAnnouncement(`${addon.label} removed from ${activeGroup.name}`);
+      // Keep the keyboard in the list: focus the row that took its place, or the new last row.
+      requestAnimationFrame(() => {
+        const rows = groupList.current?.querySelectorAll<HTMLElement>("[role='option']");
+        if (rows?.length) rows[Math.min(index, rows.length - 1)].focus();
+      });
+    } else if (isMenuKey(event)) {
+      event.preventDefault();
+      openContextAt(event.currentTarget, addon.id, "group");
+    }
   }
 
   function moveTo(addonId: string, requestedIndex: number) {
@@ -106,9 +149,13 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
 
   function openContext(event: MouseEvent<HTMLElement>, addonId: string, origin: Origin) {
     event.preventDefault();
+    openContextAt(event.currentTarget, addonId, origin, event.clientX, event.clientY);
+  }
+
+  function openContextAt(row: HTMLElement, addonId: string, origin: Origin, x = 0, y = 0) {
     if (origin === "installed") setInstalledSelection(addonId); else setGroupSelection(addonId);
-    const bounds = event.currentTarget.getBoundingClientRect();
-    setContext({ addonId, origin, x: event.clientX || bounds.left + 28, y: event.clientY || bounds.top + 24 });
+    const bounds = row.getBoundingClientRect();
+    setContext({ addonId, origin, x: x || bounds.left + 28, y: y || bounds.top + 24 });
   }
 
   function contextItems(addon: Addon, origin: Origin): MenuEntry[] {
@@ -120,17 +167,20 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
     if (origin === "installed") {
       const inGroup = activeGroup.addonIds.includes(addon.id);
       return [
-        { label: inGroup ? "Already In This Group" : !addon.available ? addon.version ?? "Not Available" : `Add To ${activeGroup.name}`, disabled: inGroup || !addon.available, onSelect: () => add(addon.id) },
+        { label: inGroup ? "Already In This Group" : !addon.available ? addon.version ?? "Not Available" : `Add To ${activeGroup.name}`, keys: inGroup || !addon.available ? undefined : "Enter", disabled: inGroup || !addon.available, onSelect: () => add(addon.id) },
         ...(links.length ? ["separator" as const, ...links] : []),
       ];
     }
     const index = activeGroup.addonIds.indexOf(addon.id);
+    const last = activeGroup.addonIds.length - 1;
     return [
-      { label: "Move To Top", disabled: index === 0, onSelect: () => moveTo(addon.id, 0) },
-      { label: "Move To Bottom", disabled: index === activeGroup.addonIds.length - 1, onSelect: () => moveTo(addon.id, activeGroup.addonIds.length) },
+      { label: "Move Up", keys: "Alt+↑", disabled: index === 0, onSelect: () => moveByKey(addon, index - 1) },
+      { label: "Move Down", keys: "Alt+↓", disabled: index === last, onSelect: () => moveByKey(addon, index + 1) },
+      { label: "Move To Top", keys: "Alt+Home", disabled: index === 0, onSelect: () => moveByKey(addon, 0) },
+      { label: "Move To Bottom", keys: "Alt+End", disabled: index === last, onSelect: () => moveByKey(addon, last) },
       ...links,
       "separator",
-      { label: "Remove From Group", onSelect: () => remove(addon.id) },
+      { label: "Remove From Group", keys: "Delete", onSelect: () => remove(addon.id) },
     ];
   }
 
@@ -164,7 +214,10 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
       onClick={() => setInstalledSelection(addon.id)}
       onFocus={(event) => { if (event.target === event.currentTarget) setInstalledSelection(addon.id); }}
       onDoubleClick={() => add(addon.id)}
-      onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(addon.id); } }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") { event.preventDefault(); if (draggable) { add(addon.id); setAnnouncement(`${addon.label} added to ${activeGroup.name}`); } }
+        else if (isMenuKey(event)) { event.preventDefault(); openContextAt(event.currentTarget, addon.id, "installed"); }
+      }}
       onContextMenu={(event) => openContext(event, addon.id, "installed")}>
       {draggable ? <Grip /> : <span className="as-grip-space" />}
       <span className="label as-ellipsis as-grow" title={addon.name === addon.label ? addon.path ?? addon.name : `${addon.name}\n${addon.path ?? ""}`}>{addon.label}</span>
@@ -201,7 +254,7 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
           {filteredDlcs.map(installedRow)}
           {filtered.length === 0 && <div className="k-empty"><Icon name="search" /><p className="k-empty-title">Nothing matches</p><p className="k-empty-text">No installed addons match this filter.</p></div>}
         </div>
-        <footer className="as-panel-foot"><span className="subtext k-muted">{target?.zone === "installed" ? "Drop to remove from the group" : "Drag addons into the group"}</span></footer>
+        <footer className="as-panel-foot"><span className="subtext k-muted">{target?.zone === "installed" ? "Drop to remove from the group" : "Drag addons into the group, or press Enter"}</span></footer>
       </section>
 
       <section ref={groupCard} className="k-card k-card-flush as-panel" aria-labelledby="group-title">
@@ -221,13 +274,14 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
         <div ref={groupList} className="as-panel-list" role="listbox" aria-label={`Load order of ${activeGroup.name}`} onKeyDown={arrowNavigation}>
           {groupAddons.map((addon, index) => <div key={addon.id} className="as-drop-slot">
             {lineIndex === index && <div className="as-drop-line" aria-hidden="true" />}
-            <div data-drop-index={index} className={`k-row as-addon as-dense as-draggable ${!addon.available ? "as-unavailable" : ""} ${drag?.payload.origin === "group" && drag.payload.addonId === addon.id ? "as-lifted" : ""}`}
+            <div data-drop-index={index} data-addon-id={addon.id} className={`k-row as-addon as-dense as-draggable ${!addon.available ? "as-unavailable" : ""} ${drag?.payload.origin === "group" && drag.payload.addonId === addon.id ? "as-lifted" : ""}`}
               role="option" tabIndex={0} aria-selected={groupSelection === addon.id}
               onPointerDown={(event) => begin(event, { addonId: addon.id, origin: "group" })}
               onClick={(event) => { if (!fromControl(event)) setGroupSelection(addon.id); }}
               onFocus={(event) => { if (event.target === event.currentTarget) setGroupSelection(addon.id); }}
               onDoubleClick={(event) => { if (!fromControl(event)) remove(addon.id); }}
-              onKeyDown={(event) => { if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); remove(addon.id); } }}
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+Home Alt+End Delete"
+              onKeyDown={(event) => groupRowKey(event, addon, index)}
               onContextMenu={(event) => openContext(event, addon.id, "group")}>
               <Grip />
               <span className="label k-muted k-num as-order">{index + 1}</span>
@@ -241,11 +295,12 @@ export default function Mods({ catalog, groups, repositories, onOpenSources }: {
         </div>
         <footer className="as-panel-foot">
           <span className="subtext k-muted as-grow" title={groups.saveError ?? undefined}>{groups.saveError ? "Couldn't save addon groups. Your changes stay here." : groups.loaded ? "Saved automatically" : "Loading groups…"}</span>
-          <span className="subtext k-muted">Drag to reorder. Delete to remove.</span>
+          <span className="subtext k-muted">Drag or Alt+↑↓ to reorder. Delete to remove.</span>
         </footer>
       </section>
     </div>
 
+    <span className="k-sr" role="status" aria-live="polite">{announcement}</span>
     {drag && draggedAddon && <DragGhost state={drag} title={draggedAddon.label} sub={ghostSub} />}
     {context && contextAddon && <Menu anchor={pointAnchor(context.x, context.y)} label={`Actions for ${contextAddon.label}`} items={contextItems(contextAddon, context.origin)} onClose={() => setContext(null)} />}
 

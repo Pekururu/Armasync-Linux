@@ -78,7 +78,8 @@ to download.
 3. **Make an addon group.** An addon group is the list of mods Arma starts
    with, in load order. If your unit publishes modsets, pick one on the
    repository and press **Create Addon Group**. Otherwise build one in **Mods**
-   by dragging addons from the left into the group on the right.
+   by dragging addons from the left into the group on the right, or press
+   Enter on one. Alt+↑ and Alt+↓ change the load order from the keyboard.
 4. **Set up voice.** Open **Voice** and follow the checklist. Each step says
    what it does and has one button. When TeamSpeak's installer opens, choose
    **Install for all users** and keep the default folder.

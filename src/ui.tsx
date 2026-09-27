@@ -59,6 +59,8 @@ export async function copyText(text: string) {
 export type MenuEntry = {
   label: string;
   sub?: string;
+  /** A keyboard shortcut, shown at the end of the item. */
+  keys?: string;
   checked?: boolean;
   disabled?: boolean;
   onSelect: () => void;
@@ -123,6 +125,7 @@ export function Menu({ anchor, items, label, onClose, returnFocus }: { anchor: A
         : <button key={`${item.label}-${index}`} type="button" role={radio ? "menuitemradio" : "menuitem"} aria-checked={radio ? !!item.checked : undefined} disabled={item.disabled}
           className="as-menu-item" onClick={() => { close(); item.onSelect(); }}>
           <span className="as-menu-text"><span className="label">{item.label}</span>{item.sub && <span className="subtext k-muted">{item.sub}</span>}</span>
+          {item.keys && <span className="subtext k-muted k-num as-menu-keys" aria-hidden="true">{item.keys}</span>}
           {item.checked && <Icon name="check" />}
         </button>)}
     </div>,

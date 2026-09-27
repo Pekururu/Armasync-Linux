@@ -1,7 +1,7 @@
 import type { AddonSource, SavedRepository, SourceStatus } from "../bindings";
 import type { Catalog } from "../state/catalog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { useRef, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 import { plural, tidyPath } from "../format";
 import { repositoryFor } from "../state/catalog";
 import { Banner, DragGhost, Grip, Icon, MenuButton, Sheet, Status, dropIndexAt, edgeScroll, inside, usePointerDrag } from "../ui";
@@ -16,6 +16,7 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
   const { sources, sourceBusy, mutateSources } = catalog;
   const list = useRef<HTMLDivElement>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const hasWorkshop = sources.some((source) => source.kind === "workshop");
   const ownedDlc = catalog.dlcAddons.filter((addon) => addon.available).length;
 
@@ -27,16 +28,37 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
       if (index === null) return;
       const existing = sources.findIndex((source) => source.id === state.payload);
       if (existing < 0 || index === existing || index === existing + 1) return;
-      const reordered = [...sources];
-      const [moved] = reordered.splice(existing, 1);
-      reordered.splice(existing < index ? index - 1 : index, 0, moved);
-      void catalog.reorderSources(reordered.map((source) => source.id));
+      void moveSource(state.payload, existing < index ? index - 1 : index);
     },
     cancel: () => setDropIndex(null),
   });
   const dragged = drag ? sources.find((source) => source.id === drag.payload) : undefined;
   const draggedIndex = dragged ? sources.indexOf(dragged) : -1;
   const lineIndex = dropIndex !== null && !(dropIndex === draggedIndex || dropIndex === draggedIndex + 1) ? dropIndex : null;
+
+  /** Puts a source at `place`, counted from the top once it has moved. */
+  async function moveSource(id: string, place: number, announce = false) {
+    const existing = sources.findIndex((source) => source.id === id);
+    const target = Math.max(0, Math.min(place, sources.length - 1));
+    if (existing < 0 || target === existing || sourceBusy) return;
+    const reordered = [...sources];
+    const [moved] = reordered.splice(existing, 1);
+    reordered.splice(target, 0, moved);
+    await catalog.reorderSources(reordered.map((source) => source.id));
+    if (!announce) return;
+    setAnnouncement(`${describe(moved).title} moved to ${target + 1} of ${sources.length}`);
+    // Keep the keyboard on the row that moved.
+    requestAnimationFrame(() => list.current?.querySelector<HTMLElement>(`[data-source-id="${CSS.escape(id)}"] .k-row-trail button`)?.focus());
+  }
+
+  /** Alt+arrows, Home and End move a source while focus is on its row. */
+  function rowKey(event: KeyboardEvent<HTMLElement>, id: string, index: number) {
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: sources.length - 1 };
+    // Keys pressed inside the row's own menu bubble here through the portal; leave those to the menu.
+    if (!event.altKey || !(event.key in moves) || !event.currentTarget.contains(event.target as Node)) return;
+    event.preventDefault();
+    void moveSource(id, moves[event.key], true);
+  }
 
   function describe(source: AddonSource) {
     const repository = source.kind === "custom" ? repositoryFor(source.path, repositories) : undefined;
@@ -57,8 +79,8 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
         const problem = problemWords[source.status];
         return <div key={source.id} className="as-drop-slot" role="listitem">
           {lineIndex === index && <div className="as-drop-line" aria-hidden="true" />}
-          <div data-drop-index={index} className={`k-row as-static as-draggable ${!source.enabled ? "as-unavailable" : ""} ${drag?.payload === source.id ? "as-lifted" : ""}`}
-            onPointerDown={(event) => begin(event, source.id)} title="Drag to change the order">
+          <div data-drop-index={index} data-source-id={source.id} className={`k-row as-static as-draggable ${!source.enabled ? "as-unavailable" : ""} ${drag?.payload === source.id ? "as-lifted" : ""}`}
+            onPointerDown={(event) => begin(event, source.id)} onKeyDown={(event) => rowKey(event, source.id, index)} title="Drag or press Alt+↑↓ to change the order">
             <Grip />
             <span className="label k-muted k-num as-order">{index + 1}</span>
             <div className="k-row-body">
@@ -68,10 +90,13 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
             </div>
             <span className="k-row-trail">
               {locked && <span className="as-lock" title="Download folder of a repository. Remove the repository to remove it here."><Icon name="lock" /></span>}
-              <MenuButton className="k-btn k-btn-icon" label={`Actions for ${title}`} title="More" disabled={sourceBusy} items={[
+              <MenuButton className="k-btn k-btn-icon" label={`Actions for ${title}`} title="More" items={[
+                { label: "Move Up", keys: "Alt+↑", disabled: sourceBusy || index === 0, onSelect: () => void moveSource(source.id, index - 1, true) },
+                { label: "Move Down", keys: "Alt+↓", disabled: sourceBusy || index === sources.length - 1, onSelect: () => void moveSource(source.id, index + 1, true) },
+                "separator",
                 { label: "Open Folder", onSelect: () => void openPath(source.path) },
-                { label: source.enabled ? "Turn Off" : "Turn On", onSelect: () => void mutateSources("set_addon_source_enabled", { id: source.id, enabled: !source.enabled }) },
-                ...(locked ? [] : [{ label: "Remove", sub: "Files stay on disk", onSelect: () => void mutateSources("remove_addon_source", { id: source.id }) }]),
+                { label: source.enabled ? "Turn Off" : "Turn On", disabled: sourceBusy, onSelect: () => void mutateSources("set_addon_source_enabled", { id: source.id, enabled: !source.enabled }) },
+                ...(locked ? [] : [{ label: "Remove", sub: "Files stay on disk", disabled: sourceBusy, onSelect: () => void mutateSources("remove_addon_source", { id: source.id }) }]),
               ]} />
             </span>
           </div>
@@ -94,6 +119,7 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
     {catalog.sourceError && <Banner tone="danger" title="Couldn't change sources">{catalog.sourceError}</Banner>}
     <Banner title="Only top-level folders">Armasync looks for @mod folders directly inside each source. It doesn't search subfolders.</Banner>
 
+    <span className="k-sr" role="status" aria-live="polite">{announcement}</span>
     {drag && dragged && <DragGhost state={drag} title={describe(dragged).title} sub={lineIndex === null ? "Drop to keep its place" : `Drop to move to #${lineIndex > draggedIndex ? lineIndex : lineIndex + 1}`} />}
   </Sheet>;
 }

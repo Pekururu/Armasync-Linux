@@ -30,6 +30,12 @@ stored atomically in `~/.config/armasync/addon-groups.toml`. Groups can be
 created, renamed, duplicated, or deleted. Duplicating a repository-linked group
 creates an independent copy so later repository updates cannot overwrite it.
 
+Everything on the Mods screen works without a mouse too. In either list, the
+arrow keys, Home and End move between rows, and the Menu key or Shift+F10 opens
+a row's menu. In Installed addons, Enter adds the focused addon to the group. In
+the group, Alt+↑ and Alt+↓ move the focused addon one place, Alt+Home and
+Alt+End move it to the top or bottom, and Delete removes it.
+
 The Launch screen lists player profiles and saved servers. Player identities can
 be added, renamed, and removed from the launcher without deleting their Arma
 profile files. Choosing a profile in the list makes it the one used at launch.

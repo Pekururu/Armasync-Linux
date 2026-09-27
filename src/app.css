@@ -138,6 +138,7 @@ button, input, select, textarea { font: inherit; }
 .as-menu-item .k-icon { width: 20px; height: 20px; color: var(--accent-ink); }
 .as-menu-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .as-menu-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-menu-keys { margin-left: var(--space-4); white-space: nowrap; }
 .as-menu-separator { height: 1px; margin: var(--space-1) 0; background: var(--line); }
 
 /* ---------- Sheet and dialog ---------- */

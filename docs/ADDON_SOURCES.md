@@ -35,7 +35,8 @@ Configuration is written atomically to:
 ## Scan and priority behavior
 
 Sources are ordered from highest to lowest priority and can be reordered by
-dragging. This order is used when resolving duplicate addon identities: the
+dragging, with Alt+↑ and Alt+↓ on a source's ⋯ button, or with Move Up and Move
+Down in its ⋯ menu. This order is used when resolving duplicate addon identities: the
 first matching addon wins.
 
 Scanning is deliberately bounded:
