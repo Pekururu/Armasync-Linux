@@ -1,0 +1,248 @@
+/* Armasync on KalmUI. Colours, radii, type, spacing and motion come from KalmUI tokens and classes.
+   This file only lays the app out. */
+
+/* bundle.css loads Inter from Google Fonts, which the app's CSP blocks and which needs a connection.
+   The same variable font ships with KalmUI, so it is served locally. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("./kalmui/fonts/InterVariable.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("./kalmui/fonts/InterVariable-Italic.woff2") format("woff2"); }
+
+/* Armasync amber. Set on every theme root so the light theme's own brand value doesn't win. */
+:root, [data-theme="dark"], [data-theme="light"] { --brand: #f0b44c; }
+
+html, body, #root { height: 100%; margin: 0; overflow: hidden; background: var(--bg); }
+/* A desktop app: interface text isn't selectable, so dragging rows never starts a text selection.
+   What you might want to copy (fields, paths, commands, error text) still is. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, code, .as-mono, .k-banner-text, .k-field-help { -webkit-user-select: text; user-select: text; }
+button, input, select, textarea { font: inherit; }
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+
+/* ---------- Helpers ---------- */
+.as-icon { display: contents; }
+.as-flat { margin: 0; }
+.as-grow { flex: 1; }
+.as-min0 { min-width: 0; }
+.as-center { text-align: center; }
+.as-nowrap { white-space: nowrap; }
+.as-end { justify-content: flex-end; }
+.as-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-mono { font-family: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", Menlo, monospace; }
+.as-stack-hair { display: flex; flex-direction: column; gap: 2px; }
+.as-stack-tight { display: flex; flex-direction: column; gap: var(--space-2); }
+.as-stack-loose { display: flex; flex-direction: column; gap: var(--space-4); }
+.as-flex-col { display: flex; flex-direction: column; }
+.as-row-top { display: flex; align-items: flex-start; gap: var(--space-3); }
+.as-row-center { display: flex; align-items: center; gap: var(--space-3); }
+.as-row-between { display: flex; justify-content: space-between; gap: var(--space-3); }
+.as-inline { display: inline-flex; align-items: center; gap: 6px; }
+.as-inline .k-icon { width: 18px; height: 18px; flex: none; }
+.as-spaced { margin-top: var(--space-1); }
+.as-inline-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.as-sunken { background: var(--surface-sunken); --k-cut: var(--surface-sunken); }
+.as-divider-top { border-top: 1px solid var(--line); }
+.as-btn-compact { min-height: 40px; padding: 0 12px; }
+.as-fill { flex: 1; min-width: 0; justify-content: space-between; }
+.as-lock { display: inline-flex; color: var(--ink-muted); }
+.as-lock .k-icon { width: 20px; height: 20px; }
+
+/* Rows that only show information, and dividers between rows outside a k-list. */
+.k-row.as-static { cursor: default; }
+.k-row.as-static:hover, .k-row.as-static:active { background: none; }
+.as-divided + .as-divided::before {
+  content: ""; position: absolute; top: 0; left: var(--space-5); right: var(--space-5); height: 1px; background: var(--line);
+}
+.k-row:disabled { opacity: 0.45; cursor: default; }
+.k-row:disabled:hover { background: none; }
+.k-row .k-row-body .k-status { margin-top: 2px; }
+
+/* A long disclosure inside a card keeps rows full width. */
+.as-more-pad { padding: var(--space-1) 0 var(--space-2); }
+.as-more-pad > summary { margin: 0 var(--space-5); }
+.as-more-tools { padding: 0 var(--space-5) var(--space-2); }
+.as-more-body { padding-top: var(--space-2); }
+
+.k-focus-track > span { width: var(--p, 0%); }
+/* KalmUI has no looping animation, so "waiting" is a full, faint bar. */
+.as-indeterminate > span { opacity: 0.35; }
+
+/* ---------- Shell: rail, window bar, main, dock ---------- */
+.as-app { height: 100%; display: grid; grid-template-columns: var(--rail-width) minmax(0, 1fr); background: var(--bg); }
+.as-rail {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  padding: var(--space-5) 0 var(--space-3); overflow-y: auto; scrollbar-width: none;
+  background: var(--surface); border-right: 1px solid var(--line);
+}
+.as-mark { color: var(--accent-ink); font-weight: 700; margin-bottom: var(--space-4); user-select: none; }
+.k-nav-item.as-nav-item { flex: none; width: 72px; min-height: 60px; }
+
+.as-body { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.as-windowbar { display: flex; justify-content: flex-end; min-height: 36px; user-select: none; }
+.as-window-btn {
+  display: grid; place-items: center; width: 44px; height: 36px; padding: 0;
+  border: 0; background: none; color: var(--ink-muted); cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.as-window-btn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.as-window-btn:last-child:hover { background: var(--danger); color: var(--bg); }
+.as-window-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.as-window-btn .k-icon { width: 18px; height: 18px; }
+
+.as-main { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: var(--space-2) var(--space-8) var(--space-6); }
+.as-screen { flex: 1 0 auto; width: 100%; max-width: var(--content-max); margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-5); }
+.as-screen-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.as-screen-head.as-tight { min-height: var(--tap-min); flex-wrap: nowrap; }
+.as-screen-head.as-end-align { align-items: flex-end; gap: var(--space-4); }
+.as-center-screen { align-items: center; justify-content: center; }
+
+.as-dock {
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0;
+  padding: var(--space-3) var(--space-8); background: var(--surface); border-top: 1px solid var(--line);
+}
+.as-dock .k-btn-neutral { flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.as-dock .k-btn-primary { flex: none; }
+.as-dock-status {
+  flex: none; min-height: var(--tap-min); padding: 0 var(--space-2); margin-left: calc(-1 * var(--space-2));
+  border: 0; border-radius: var(--radius-md); background: none; font: inherit; cursor: pointer;
+}
+.as-dock-status:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* Window edges: the system title bar is off, so the app resizes itself. */
+.resize-grip { position: fixed; z-index: 300; }
+.resize-north { top: 0; left: 10px; right: 10px; height: 4px; cursor: n-resize; }
+.resize-south { bottom: 0; left: 10px; right: 10px; height: 4px; cursor: s-resize; }
+.resize-west { left: 0; top: 10px; bottom: 10px; width: 4px; cursor: w-resize; }
+.resize-east { right: 0; top: 10px; bottom: 10px; width: 4px; cursor: e-resize; }
+.resize-northwest { top: 0; left: 0; width: 10px; height: 10px; cursor: nw-resize; }
+.resize-northeast { top: 0; right: 0; width: 10px; height: 10px; cursor: ne-resize; }
+.resize-southwest { bottom: 0; left: 0; width: 10px; height: 10px; cursor: sw-resize; }
+.resize-southeast { bottom: 0; right: 0; width: 10px; height: 10px; cursor: se-resize; }
+
+/* The toast sits above the dock, next to the rail. */
+.k-toast { bottom: calc(var(--space-6) + 72px); }
+@media (min-width: 900px) { .k-toast { bottom: calc(var(--space-6) + 72px); left: calc(var(--rail-width) + 16px); } }
+
+/* ---------- Menus ---------- */
+.as-menu {
+  position: fixed; z-index: 80; max-width: min(360px, calc(100vw - 16px)); max-height: 60vh; overflow-y: auto;
+  padding: var(--space-1); background: var(--surface-raised); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-float);
+}
+.as-menu-item {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.as-menu-item:hover, .as-menu-item:focus-visible { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.as-menu-item:focus-visible { outline-offset: -2px; }
+.as-menu-item:disabled { opacity: 0.45; cursor: default; background: none; }
+.as-menu-item .k-icon { width: 20px; height: 20px; color: var(--accent-ink); }
+.as-menu-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.as-menu-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-menu-separator { height: 1px; margin: var(--space-1) 0; background: var(--line); }
+
+/* ---------- Sheet and dialog ---------- */
+.as-sheet { display: flex; flex-direction: column; gap: var(--space-4); }
+.as-sheet .k-sheet-head { margin-bottom: 0; }
+.as-sheet-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+@media (min-width: 900px) {
+  .as-sheet { overflow: hidden; }
+  .as-sheet-body { overflow-y: auto; }
+}
+.as-dialog {
+  position: fixed; z-index: 41; left: 50%; top: 50%;
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-6);
+  background: var(--surface-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-float);
+  opacity: 0; transform: translate(-50%, -48%);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  --k-cut: var(--surface-raised);
+}
+.as-dialog.is-open { opacity: 1; transform: translate(-50%, -50%); }
+.as-dialog .k-eyebrow, .k-eyebrow.as-flat { margin: 0; }
+
+/* ---------- Drag and drop ---------- */
+.as-grip { flex: none; display: grid; grid-template-columns: repeat(2, 3px); gap: 3px; opacity: 0.5; }
+.as-grip > i { width: 3px; height: 3px; border-radius: var(--radius-round); background: currentColor; }
+.as-grip-space { flex: none; width: 9px; }
+.as-draggable { cursor: grab; touch-action: none; }
+.as-lifted { opacity: 0.4; }
+.as-drop-slot { position: relative; }
+.as-drop-line { position: relative; z-index: 1; height: 2px; margin: -1px var(--space-4); border-radius: var(--radius-sm); background: var(--accent); }
+.as-drop-zone { box-shadow: inset 0 0 0 2px var(--line-strong); }
+.as-ghost {
+  position: fixed; z-index: 70; pointer-events: none;
+  background: var(--surface-raised); border-radius: var(--radius-md); box-shadow: var(--shadow-float);
+  transform: rotate(-1.5deg); --k-cut: var(--surface-raised);
+}
+html.as-dragging, html.as-dragging * { cursor: grabbing !important; -webkit-user-select: none !important; user-select: none !important; }
+
+/* ---------- Play ---------- */
+.as-play { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--space-8); align-items: start; padding-top: var(--space-4); }
+.as-play > .as-stack-loose { gap: var(--space-6); }
+.as-display { font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+.as-launch-card { display: flex; flex-direction: column; gap: var(--space-1); }
+.as-launch-card > .k-eyebrow { margin-bottom: var(--space-1); }
+.k-row.as-picker-row { padding-left: 0; padding-right: 0; }
+.k-row.as-picker-row:hover { background: none; }
+.k-row.as-picker-row:hover .k-row-title { color: var(--accent-ink); }
+.as-picker-row + .as-picker-row { border-top: 1px solid var(--line); }
+.as-launch-actions { margin-top: var(--space-4); }
+.as-launch-primary { width: 100%; min-height: 56px; }
+
+/* ---------- Mods ---------- */
+.as-mods { flex: 1 1 0; min-height: 420px; }
+.as-mods-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+.as-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding-bottom: 0; }
+.as-panel-head { min-height: 64px; }
+.as-panel-tools { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4) var(--space-3); }
+.as-panel-list { flex: 1; min-height: 0; overflow-y: auto; }
+.as-panel-foot { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: var(--space-2) var(--space-4); border-top: 1px solid var(--line); }
+.as-list-eyebrow { margin: var(--space-4) var(--space-5) var(--space-1); }
+.as-order { flex: none; width: 20px; }
+/* Dense addon rows: one line, source on the right, so long load orders fit on screen. */
+.k-row.as-dense { min-height: 40px; padding: var(--space-1) var(--space-4) var(--space-1) var(--space-5); gap: var(--space-3); }
+.as-source { max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.as-row-icon.k-btn-icon { width: 32px; min-height: 32px; margin: -4px -4px -4px 0; }
+.as-row-icon .k-icon { width: 18px; height: 18px; }
+.as-unavailable > .label, .as-unavailable > .as-source { opacity: 0.6; }
+.as-unavailable .k-row-body { opacity: 0.6; }
+
+/* ---------- Repositories ---------- */
+.as-repos { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.as-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.as-fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.as-check-row { cursor: pointer; }
+.as-checkbox { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.as-inspection { display: flex; align-items: flex-start; gap: var(--space-3); }
+
+/* ---------- Voice ---------- */
+.as-column { width: 100%; max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-5); padding-top: var(--space-2); }
+.as-current-step { box-shadow: var(--shadow-float); }
+.as-future { opacity: 0.7; }
+.as-steps { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1); }
+
+/* ---------- Launch ---------- */
+.as-launch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
+.as-card-title-gap { flex: none; margin-bottom: var(--space-2); }
+.as-divided-switch + .as-divided-switch { border-top: 1px solid var(--line); }
+.as-launch .k-more.as-divider-top { padding-top: var(--space-2); }
+.as-number-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); }
+.as-address-grid { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: var(--space-3); }
+/* The command preview stays in view at the bottom while the settings scroll. */
+.as-command { position: sticky; bottom: 0; z-index: 2; margin-top: auto; display: flex; align-items: center; gap: var(--space-4); }
+
+/* ---------- Health ---------- */
+.as-health-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-5); align-items: start; }
+.as-command-box { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-md); background: var(--surface-sunken); }
+
+/* ---------- Narrow windows ---------- */
+@media (max-width: 1080px) {
+  .as-play, .as-repos, .as-health-grid { grid-template-columns: minmax(0, 1fr); }
+  .as-main { padding-left: var(--space-5); padding-right: var(--space-5); }
+  .as-dock { padding-left: var(--space-5); padding-right: var(--space-5); }
+}
+@media (max-width: 900px) {
+  .as-mods-grid, .as-launch-grid { grid-template-columns: minmax(0, 1fr); }
+  .as-mods-grid { grid-template-rows: minmax(280px, 1fr) minmax(280px, 1fr); }
+  .as-mods { min-height: 640px; }
+  .as-dock .k-btn-neutral { max-width: 150px; padding: 0 14px; }
+}

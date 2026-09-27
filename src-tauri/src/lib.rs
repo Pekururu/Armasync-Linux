@@ -106,6 +106,36 @@ async fn import_repository(
     repository_store::add(snapshot.repository.name, autoconfig_url, destination)
 }
 
+/// The same inspection `import_repository` runs, without saving, so the add
+/// dialog can show what the link points to first.
+#[tauri::command]
+async fn inspect_repository(autoconfig_url: String) -> Result<model::RepositorySnapshot, String> {
+    let parsed = url::Url::parse(&autoconfig_url)
+        .map_err(|error| format!("invalid auto-config URL: {error}"))?;
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("credentials may not be embedded in a saved auto-config URL".into());
+    }
+    repository::inspect(&autoconfig_url)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Free bytes on the disk that holds `path`, or its nearest existing parent,
+/// since a new download folder is only created when the repository is saved.
+#[tauri::command]
+fn free_space(path: String) -> Option<u64> {
+    let mut candidate = std::path::Path::new(&path);
+    if !candidate.is_absolute() {
+        return None;
+    }
+    loop {
+        if candidate.exists() {
+            return fs2::available_space(candidate).ok();
+        }
+        candidate = candidate.parent()?;
+    }
+}
+
 #[tauri::command]
 async fn connect_repository(id: String) -> Result<model::RepositorySnapshot, String> {
     let saved = repository_store::get(&id)?;
@@ -346,6 +376,8 @@ pub fn run() {
             save_launch_selection,
             list_repositories,
             import_repository,
+            inspect_repository,
+            free_space,
             connect_repository,
             update_repository_destination,
             remove_repository,

@@ -1,8 +1,34 @@
-import type { HostDependency, VoiceStatus, DlcStatus, DetectedDlc, DlcDetection, AddonSource, DiscoveredAddon, AddonGroup, LaunchSelection } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { bytes, plural } from "./format";
+import AddRepository from "./screens/AddRepository";
+import Health from "./screens/Health";
+import Launch from "./screens/Launch";
+import Mods from "./screens/Mods";
+import Play, { PickerRow, type Readiness, type ReadinessRow } from "./screens/Play";
+import Repos from "./screens/Repos";
+import Sources from "./screens/Sources";
+import Voice, { voiceProgress } from "./screens/Voice";
+import { type Addon, groupSummary, repositoryFor, useCatalog, useGroups } from "./state/catalog";
+import { useLaunchSelection, useLauncher } from "./state/launcher";
+import { syncPercent, useRepositories } from "./state/repositories";
+import { useHealth, useVoice } from "./state/system";
+import { Icon, type MenuEntry, MenuButton, Sheet, Status, type StatusKey } from "./ui";
+
+type Screen = "play" | "mods" | "repos" | "voice" | "launch" | "health";
+
+const screens: { id: Screen; label: string; icon: string }[] = [
+  { id: "play", label: "Play", icon: "skip" },
+  { id: "mods", label: "Mods", icon: "list" },
+  { id: "repos", label: "Repos", icon: "empty" },
+  { id: "voice", label: "Voice", icon: "spark" },
+  { id: "launch", label: "Launch", icon: "settings" },
+  { id: "health", label: "Health", icon: "focus" },
+];
 
 const resizeEdges = ["North", "South", "East", "West", "NorthWest", "NorthEast", "SouthWest", "SouthEast"] as const;
+
 function ResizeGrips() {
   return <>{resizeEdges.map((edge) => (
     <div key={edge} className={`resize-grip resize-${edge.toLowerCase()}`} onPointerDown={(event) => {
@@ -13,605 +39,118 @@ function ResizeGrips() {
     }} />
   ))}</>;
 }
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { type DragEvent, type MouseEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import RepositoryView from "./RepositoryView";
-import VoiceView from "./VoiceView";
-import LauncherOptionsView, { type OptionsView } from "./LauncherOptionsView";
-import TroubleshootingView from "./TroubleshootingView";
-import appIconUrl from "../src-tauri/icons/icon.png";
 
-type Addon = {
-  id: string;
-  name: string;
-  folder: string;
-  source: "DLC" | "Repository" | "Workshop" | "Local";
-  kind: "dlc" | "mod";
-  available: boolean;
-  version?: string;
-  size?: string;
-  steamAppId?: number;
-  path?: string;
-  workshopId?: number;
-};
-
-type DragPayload = {
-  addonId: string;
-  origin: "installed" | "group";
-};
-
-type ContextMenuState = {
-  addonId: string;
-  origin: DragPayload["origin"];
-  x: number;
-  y: number;
-};
-
-const initialGroups: AddonGroup[] = [
-  { id: "default", name: "Default", addonIds: [], source: null },
-];
-
-const tabs = ["Addons", "Repositories", "Voice", "Configuration", "Troubleshooting"];
-
-const fallbackDlcs: DetectedDlc[] = [
-  ["contact", "Arma 3 Contact", 1021790, false],
-  ["gm", "Global Mobilization", 1042220, true],
-  ["vn", "S.O.G. Prairie Fire", 1227700, true],
-  ["csla", "CSLA Iron Curtain", 1294440, true],
-  ["ws", "Western Sahara", 1681170, true],
-  ["spe", "Spearhead 1944", 1175380, true],
-  ["rf", "Reaction Forces", 2647760, true],
-  ["ef", "Expeditionary Forces", 2647830, true],
-].map(([handle, name, appId, creatorDlc]) => ({
-  handle: String(handle),
-  name: String(name),
-  appId: Number(appId),
-  creatorDlc: Boolean(creatorDlc),
-  directory: null,
-  status: "unavailable" as const,
-}));
-
-const dlcStatusLabels: Record<DlcStatus, string> = {
-  installed: "Installed",
-  disabled: "Disabled in Steam",
-  files_only: "Files detected",
-  incomplete: "Incomplete install",
-  unavailable: "Not installed",
-};
-
-const sourceStatusLabels: Record<AddonSource["status"], string> = {
-  ready: "Ready",
-  disabled: "Disabled",
-  missing: "Folder missing",
-  unreadable: "Cannot read folder",
-};
-
-function dlcAddon(dlc: DetectedDlc): Addon {
-  return {
-    id: `dlc:${dlc.handle}`,
-    name: dlc.name,
-    folder: `-mod=${dlc.handle}`,
-    source: "DLC",
-    kind: "dlc",
-    available: dlc.status === "installed",
-    version: dlcStatusLabels[dlc.status],
-    steamAppId: dlc.appId,
-  };
+/** The window has no system title bar, so the top strip drags it and holds the window buttons. */
+function WindowBar() {
+  const appWindow = getCurrentWindow();
+  return <div className="as-windowbar" data-tauri-drag-region onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest("button")) void appWindow.toggleMaximize(); }}>
+    <button type="button" className="as-window-btn" aria-label="Minimize window" title="Minimize" onClick={() => void appWindow.minimize()}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5h10" /></svg></button>
+    <button type="button" className="as-window-btn" aria-label="Maximize window" title="Maximize" onClick={() => void appWindow.toggleMaximize()}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" /></svg></button>
+    <button type="button" className="as-window-btn" aria-label="Close window" title="Close" onClick={() => void appWindow.close()}><Icon name="close" /></button>
+  </div>;
 }
 
-function scannedAddon(addon: DiscoveredAddon): Addon {
-  return {
-    id: addon.id,
-    name: addon.name,
-    folder: addon.sourceKind === "workshop" && addon.workshopId
-      ? `Workshop / ${addon.workshopId}`
-      : addon.folder,
-    source: addon.sourceKind === "workshop" ? "Workshop" : addon.isRepository ? "Repository" : "Local",
-    kind: "mod",
-    available: true,
-    path: addon.path,
-    workshopId: addon.workshopId ?? undefined,
-  };
+type Theme = "dark" | "light" | "system";
+
+function readTheme(): Theme {
+  try { const stored = localStorage.getItem("armasync-theme"); return stored === "light" || stored === "system" ? stored : "dark"; } catch { return "dark"; }
 }
 
-type IconName = "search" | "refresh" | "folder" | "folders" | "plus" | "trash" | "edit" | "copy" | "play" | "cloud" | "repository" | "computer" | "dlc" | "external" | "close" | "grip" | "voice";
-
-function Icon({ name }: { name: IconName }) {
-  const paths = {
-    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
-    refresh: <><path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" /><path d="M20 3v5h-5" /></>,
-    folder: <path d="M3 7.5h7l2-2h9v13H3z" />,
-    folders: <><path d="M5 6h6l2 2h8v11H5z" /><path d="M3 16V5h7" /></>,
-    plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
-    trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="m7 7 1 13h8l1-13" /></>,
-    edit: <><path d="m4 20 4-1 11-11-3-3L5 16z"/><path d="m14 7 3 3"/></>,
-    copy: <><rect x="8" y="8" width="11" height="11" rx="1"/><path d="M16 8V5H5v11h3"/></>,
-    play: <path d="m8 5 11 7-11 7z" />,
-    voice: <><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></>,
-    cloud: <path d="M7 18h10.5a4.5 4.5 0 0 0 .34-8.99A6 6 0 0 0 6.4 8.2 4.9 4.9 0 0 0 7 18Z" />,
-    repository: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6" /><path d="M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></>,
-    computer: <><rect x="3" y="4" width="18" height="13" rx="1.5" /><path d="M8 21h8M12 17v4" /></>,
-    dlc: <><path d="m12 3 8 6v7l-8 5-8-5V9z" /><path d="m4 9 8 5 8-5M12 14v7" /></>,
-    external: <><path d="M14 5h5v5" /><path d="m19 5-8 8" /><path d="M18 13v6H5V6h6" /></>,
-    close: <><path d="m6 6 12 12" /><path d="M18 6 6 18" /></>,
-    grip: <><circle cx="9" cy="7" r=".8" fill="currentColor" stroke="none" /><circle cx="15" cy="7" r=".8" fill="currentColor" stroke="none" /><circle cx="9" cy="12" r=".8" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r=".8" fill="currentColor" stroke="none" /><circle cx="9" cy="17" r=".8" fill="currentColor" stroke="none" /><circle cx="15" cy="17" r=".8" fill="currentColor" stroke="none" /></>,
-  };
-  return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+/** Dark by default. Light and "match device" set data-theme on <html>, which KalmUI reads. */
+function useTheme() {
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => document.documentElement.setAttribute("data-theme", theme === "system" ? (media.matches ? "light" : "dark") : theme);
+    apply();
+    try { localStorage.setItem("armasync-theme", theme); } catch { /* The choice just won't be remembered. */ }
+    if (theme !== "system") return;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+  return [theme, setTheme] as const;
 }
 
-function SourceIcon({ source, withLabel = false }: { source: Addon["source"]; withLabel?: boolean }) {
-  const icon: Record<Addon["source"], IconName> = {
-    DLC: "dlc",
-    Repository: "repository",
-    Workshop: "cloud",
-    Local: "computer",
-  };
-
-  return (
-    <span className={`source-type ${source.toLowerCase()}`} title={`${source} addon`} aria-label={`${source} addon`}>
-      <Icon name={icon[source]} />
-      {withLabel && <span>{source}</span>}
-    </span>
-  );
+function DisplaySheet({ open, onClose, theme, setTheme }: { open: boolean; onClose: () => void; theme: Theme; setTheme: (theme: Theme) => void }) {
+  const comfort = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (open && comfort.current) window.KalmUI.mountComfort(comfort.current); }, [open]);
+  return <Sheet open={open} onClose={onClose} title="Display" sub="Only changes how Armasync looks.">
+    <div className="k-field">
+      <span className="k-field-label" id="theme-label">Theme</span>
+      <div className="k-chips" role="group" aria-labelledby="theme-label">
+        {([["dark", "Dark"], ["light", "Light"], ["system", "Match Device"]] as const).map(([value, label]) =>
+          <button key={value} type="button" className="k-chip" aria-pressed={theme === value} onClick={() => setTheme(value)}>{label}</button>)}
+      </div>
+    </div>
+    <div ref={comfort} />
+  </Sheet>;
 }
 
-function AddonRow({
-  addon,
-  selected,
-  order,
-  onClick,
-  onDoubleClick,
-  dragging,
-  dropBefore,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
-  onFocus,
-  onContextMenu,
-  canDrag = true,
-  onQuickAction,
-  quickActionLabel,
-}: {
-  addon: Addon;
-  selected: boolean;
-  order?: number;
-  onClick: () => void;
-  onDoubleClick?: () => void;
-  dragging?: boolean;
-  dropBefore?: boolean;
-  onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
-  onDragEnd?: () => void;
-  onDragOver?: (event: DragEvent<HTMLButtonElement>) => void;
-  onDrop?: (event: DragEvent<HTMLButtonElement>) => void;
-  onFocus?: () => void;
-  onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
-  canDrag?: boolean;
-  onQuickAction?: () => void;
-  quickActionLabel?: string;
-}) {
-  return (
-    <button
-      className={`addon-row ${order !== undefined ? "ordered" : ""} ${selected ? "selected" : ""} ${dragging ? "dragging" : ""} ${dropBefore ? "drop-before" : ""} ${!addon.available ? "unavailable" : ""}`}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      type="button"
-      draggable={canDrag}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onFocus={onFocus}
-      onContextMenu={onContextMenu}
-    >
-      <span className="row-leading">
-        {order !== undefined && <span className="order-number">{order + 1}</span>}
-        <SourceIcon source={addon.source} />
-      </span>
-      <span className="addon-identity">
-        <span className="addon-name" title={addon.name}>{addon.name}</span>
-        <span className="addon-folder" title={addon.folder}>{addon.folder}</span>
-      </span>
-      {onQuickAction && <span className="row-action" role="button" tabIndex={-1} title={quickActionLabel} aria-label={quickActionLabel} onClick={(event) => { event.stopPropagation(); onQuickAction(); }} onDoubleClick={(event) => event.stopPropagation()}><Icon name={order !== undefined ? "close" : "plus"} /></span>}
-    </button>
-  );
+function idSummary(ids: string[]) {
+  const dlc = ids.filter((id) => id.startsWith("dlc:")).length;
+  const mods = ids.length - dlc;
+  return `${mods} mod${mods === 1 ? "" : "s"}${dlc ? `. ${dlc} DLC` : ""}`;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("Addons");
-  const [groups, setGroups] = useState(initialGroups);
-  const [groupsLoaded, setGroupsLoaded] = useState(false);
-  const [groupsCanSave, setGroupsCanSave] = useState(false);
-  const [groupSaveError, setGroupSaveError] = useState<string | null>(null);
-  const [groupEditor, setGroupEditor] = useState<{ mode: "create" | "rename" | "duplicate"; value: string } | null>(null);
-  const [activeGroupId, setActiveGroupId] = useState(initialGroups[0].id);
-  const [availableSelection, setAvailableSelection] = useState<string | null>(null);
-  const [groupSelection, setGroupSelection] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [source, setSource] = useState("All sources");
-  const [dragging, setDragging] = useState<DragPayload | null>(null);
-  const [groupDropIndex, setGroupDropIndex] = useState<number | null>(null);
-  const [installedDropActive, setInstalledDropActive] = useState(false);
-  const [focusedPane, setFocusedPane] = useState<DragPayload["origin"] | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [dlcDetection, setDlcDetection] = useState<DlcDetection>({ gameDirectory: null, manifestPath: null, dlcs: fallbackDlcs });
-  const [dlcScanError, setDlcScanError] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>("play");
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  const [addonSources, setAddonSources] = useState<AddonSource[]>([]);
-  const [sourceError, setSourceError] = useState<string | null>(null);
-  const [sourceBusy, setSourceBusy] = useState(false);
-  const [draggedSourceId, setDraggedSourceId] = useState<string | null>(null);
-  const [sourceDropIndex, setSourceDropIndex] = useState<number | null>(null);
-  const [installedMods, setInstalledMods] = useState<Addon[]>([]);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [isRescanning, setIsRescanning] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const [addRepositoryOpen, setAddRepositoryOpen] = useState(false);
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
-  const [missingDeps, setMissingDeps] = useState<Array<{ id: string; label: string; purpose: string; hint: string }>>([]);
-  const [depsDismissed, setDepsDismissed] = useState(false);
-  useEffect(() => {
-    void invoke<HostDependency[]>("host_dependencies")
-      .then((deps) => setMissingDeps(deps.filter((dep) => !dep.installed)))
-      .catch(() => undefined);
-  }, []);
-
-  const [teamspeakInstalled, setTeamspeakInstalled] = useState(false);
-  const [teamspeakRunning, setTeamspeakRunning] = useState(false);
-  const [teamspeakBusy, setTeamspeakBusy] = useState(false);
-  const [teamspeakError, setTeamspeakError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const refreshInstalled = () => void invoke<VoiceStatus>("get_voice_status")
-      .then((voice) => { setTeamspeakInstalled(voice.teamspeakInstalled); setTeamspeakRunning(voice.teamspeakRunning); })
-      .catch(() => undefined);
-    refreshInstalled();
-    window.addEventListener("focus", refreshInstalled);
-    const interval = window.setInterval(() => void invoke<boolean>("get_teamspeak_running")
-      .then(setTeamspeakRunning).catch(() => undefined), 3000);
-    return () => { window.removeEventListener("focus", refreshInstalled); window.clearInterval(interval); };
-  }, []);
-
-  async function startTeamSpeak() {
-    setTeamspeakBusy(true); setTeamspeakError(null);
-    try {
-      await invoke("launch_teamspeak");
-      window.setTimeout(() => void invoke<boolean>("get_teamspeak_running").then(setTeamspeakRunning).catch(() => undefined), 1800);
-    } catch (cause) { setTeamspeakError(String(cause)); }
-    finally { setTeamspeakBusy(false); }
-  }
   const [launchError, setLaunchError] = useState<string | null>(null);
-  const [launchOptions, setLaunchOptions] = useState<OptionsView | null>(null);
-  const [configurationDirty, setConfigurationDirty] = useState(false);
-  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [playerProfile, setPlayerProfile] = useState("");
-  const [persistedSelection, setPersistedSelection] = useState<LaunchSelection | null>(null);
-  const [selectionFetched, setSelectionFetched] = useState(false);
-  const [selectionReady, setSelectionReady] = useState(false);
-  const selectionHydrated = useRef(false);
+  const [theme, setTheme] = useTheme();
 
-  async function scanDlc() {
-    try {
-      const detection = await invoke<DlcDetection>("detect_dlc");
-      setDlcDetection(detection);
-      setDlcScanError(null);
-    } catch (error) {
-      setDlcScanError(String(error));
-    }
-  }
+  const catalog = useCatalog();
+  const groups = useGroups(catalog.allAddons);
+  const launcher = useLauncher();
+  const selection = useLaunchSelection(groups.groups, groups.loaded, launcher.settings, groups.setActiveGroupId, groups.activeGroupId);
+  const repos = useRepositories({ defaultDestination: catalog.dlcDetection.gameDirectory, onSynchronized: catalog.scanAddonCatalog });
+  const voice = useVoice(screen === "voice");
+  const health = useHealth();
 
-  async function refreshSources() {
-    setSourceBusy(true);
-    try {
-      setAddonSources(await invoke<AddonSource[]>("list_addon_sources"));
-      setSourceError(null);
-    } catch (error) {
-      setSourceError(String(error));
-    } finally {
-      setSourceBusy(false);
-    }
-  }
+  const groupAddonsRef = useRef<Addon[]>(groups.groupAddons);
+  groupAddonsRef.current = groups.groupAddons;
 
-  async function scanAddonCatalog() {
-    try {
-      const discovered = await invoke<DiscoveredAddon[]>("scan_addon_catalog");
-      setInstalledMods(discovered.map(scannedAddon));
-      setCatalogError(null);
-    } catch (error) {
-      setCatalogError(String(error));
-    }
-  }
+  const openSources = useCallback(() => { setScreen("mods"); setSourcesOpen(true); void catalog.refreshSources(); }, []);
 
-  async function rescanAll() {
-    setIsRescanning(true);
-    try {
-      await Promise.all([scanDlc(), refreshSources(), scanAddonCatalog()]);
-    } finally {
-      setIsRescanning(false);
-    }
-  }
-
-  async function addSource() {
-    const selected = await openDialog({
-      directory: true,
-      multiple: false,
-      title: "Choose an addon search directory",
-    });
-    if (typeof selected !== "string") return;
-    await mutateSources("add_addon_source", { path: selected });
-  }
-
-  async function mutateSources(command: string, arguments_: Record<string, unknown>) {
-    setSourceBusy(true);
-    try {
-      setAddonSources(await invoke<AddonSource[]>(command, arguments_));
-      setSourceError(null);
-      await scanAddonCatalog();
-    } catch (error) {
-      setSourceError(String(error));
-    } finally {
-      setSourceBusy(false);
-    }
-  }
-
-  async function reorderSources(requestedIndex: number) {
-    if (!draggedSourceId) return;
-    const existingIndex = addonSources.findIndex((source_) => source_.id === draggedSourceId);
-    if (existingIndex < 0) return;
-    const reordered = [...addonSources];
-    const [moved] = reordered.splice(existingIndex, 1);
-    const adjustedIndex = existingIndex < requestedIndex ? requestedIndex - 1 : requestedIndex;
-    reordered.splice(Math.max(0, Math.min(adjustedIndex, reordered.length)), 0, moved);
-    setAddonSources(reordered);
-    setDraggedSourceId(null);
-    setSourceDropIndex(null);
-    await mutateSources("reorder_addon_sources", { ids: reordered.map((source_) => source_.id) });
-  }
-
-  useEffect(() => {
-    void rescanAll();
-  }, []);
-
-  useEffect(() => {
-    void invoke<AddonGroup[]>("list_addon_groups").then((saved) => {
-      const next = saved.length ? saved : initialGroups;
-      setGroups(next);
-      setActiveGroupId((current) => next.some((group) => group.id === current) ? current : next[0].id);
-      setGroupsLoaded(true);
-      setGroupsCanSave(true);
-      setGroupSaveError(null);
-    }).catch((cause) => {
-      setGroupSaveError(String(cause));
-      setGroupsLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!groupsCanSave) return;
-    const timeout = window.setTimeout(() => {
-      void invoke<AddonGroup[]>("save_addon_groups", { groups }).then(() => setGroupSaveError(null)).catch((cause) => setGroupSaveError(String(cause)));
-    }, 250);
-    return () => window.clearTimeout(timeout);
-  }, [groups, groupsCanSave]);
-
-  useEffect(() => {
-    void invoke<LaunchSelection>("get_launch_selection")
-      .then(setPersistedSelection)
-      .catch(() => undefined)
-      .finally(() => setSelectionFetched(true));
-  }, []);
-
-  useEffect(() => {
-    if (selectionHydrated.current || !groupsLoaded || !launchOptions || !selectionFetched) return;
-    selectionHydrated.current = true;
-    const preferredGroupId = persistedSelection?.activeAddonGroupId;
-    if (preferredGroupId && groups.some((group) => group.id === preferredGroupId)) setActiveGroupId(preferredGroupId);
-    const preferredServerId = persistedSelection?.selectedServerId;
-    setSelectedServerId(preferredServerId && launchOptions.settings.servers.some((server) => server.id === preferredServerId) ? preferredServerId : null);
-    const preferredProfile = persistedSelection?.playerProfile ?? "";
-    setPlayerProfile(preferredProfile && launchOptions.settings.playerProfiles.includes(preferredProfile) ? preferredProfile : "");
-    setSelectionReady(true);
-  }, [groupsLoaded, launchOptions, selectionFetched, persistedSelection, groups]);
-
-  useEffect(() => {
-    if (!selectionReady) return;
-    const timeout = window.setTimeout(() => {
-      void invoke("save_launch_selection", { selection: {
-        activeAddonGroupId: activeGroupId,
-        selectedServerId,
-        playerProfile: playerProfile || null,
-      } }).catch(() => undefined);
-    }, 250);
-    return () => window.clearTimeout(timeout);
-  }, [activeGroupId, selectedServerId, playerProfile, selectionReady]);
-
-  const dlcAddons = useMemo(() => dlcDetection.dlcs.map(dlcAddon), [dlcDetection]);
-  const allAddons = useMemo(() => [...dlcAddons, ...installedMods], [dlcAddons, installedMods]);
-
-  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0];
-  const groupAddons = activeGroup.addonIds.flatMap((id) => {
-    const addon = allAddons.find((candidate) => candidate.id === id);
-    if (addon) return [addon];
-    if (id.startsWith("path:")) {
-      const path = id.slice(5);
-      const folder = path.split("/").filter(Boolean).at(-1) ?? "Missing addon";
-      return [{ id, name: folder, folder, source: "Repository" as const, kind: "mod" as const, available: false, path }];
-    }
-    return [];
+  // ---------- Readiness: one picture for Play and the dock ----------
+  const { activeGroup, groupAddons } = groups;
+  const arma = !catalog.dlcDetected ? "locating" : catalog.dlcDetection.gameDirectory ? "found" : "missing";
+  const unavailable = groupAddons.filter((addon) => !addon.available);
+  const problems = (health.report?.checks ?? []).filter((check) => check.status === "fail" && check.id !== "arma");
+  const relevantPending = repos.pendingIds.filter((id) => {
+    const repository = repos.repositories.find((item) => item.id === id);
+    return activeGroup.source?.repositoryId === id || (!!repository && groupAddons.some((addon) => repositoryFor(addon.path, [repository])));
   });
+  const job = repos.job;
+  const syncing = job?.kind === "sync";
+  const server = launcher.settings?.servers.find((item) => item.id === selection.selectedServerId);
+  const voiceState = voiceProgress(voice.status);
+  // Missing repository mods are fine when an update is about to download them.
+  const blockingUnavailable = relevantPending.length ? unavailable.filter((addon) => addon.kind === "dlc" || !addon.path || !repos.repositories.some((repository) => relevantPending.includes(repository.id) && repositoryFor(addon.path, [repository]))) : unavailable;
 
-  const filteredAddons = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase();
-    return allAddons.filter((addon) => {
-      const visibleInCatalog = addon.kind === "mod" || addon.available;
-      const matchesQuery = !term || `${addon.name} ${addon.folder}`.toLocaleLowerCase().includes(term);
-      const matchesSource = source === "All sources" || addon.source === source;
-      return visibleInCatalog && matchesQuery && matchesSource;
-    });
-  }, [allAddons, query, source]);
-  const filteredDlcs = filteredAddons.filter((addon) => addon.kind === "dlc");
-  const filteredMods = filteredAddons.filter((addon) => addon.kind === "mod");
-  const installedDlcCount = dlcAddons.filter((addon) => addon.available).length;
-  const unavailableGroupAddons = groupAddons.filter((addon) => !addon.available);
-
-  function updateActiveGroup(transform: (ids: string[]) => string[]) {
-    setGroups((current) => current.map((group) => group.id === activeGroupId
-      ? { ...group, addonIds: transform(group.addonIds) }
-      : group));
-  }
-
-  function addSelected(id = availableSelection) {
-    const addon = allAddons.find((candidate) => candidate.id === id);
-    if (!id || !addon?.available || activeGroup.addonIds.includes(id)) return;
-    updateActiveGroup((ids) => [...ids, id]);
-    setGroupSelection(id);
-  }
-
-  function removeSelected(id = groupSelection) {
-    if (!id) return;
-    updateActiveGroup((ids) => ids.filter((addonId) => addonId !== id));
-    setGroupSelection(null);
-  }
-
-  function moveAddonToBoundary(addonId: string, boundary: "top" | "bottom") {
-    updateActiveGroup((ids) => {
-      if (!ids.includes(addonId)) return ids;
-      const remaining = ids.filter((id) => id !== addonId);
-      return boundary === "top" ? [addonId, ...remaining] : [...remaining, addonId];
-    });
-    setGroupSelection(addonId);
-    setContextMenu(null);
-  }
-
-  function openContextMenu(event: MouseEvent<HTMLButtonElement>, addonId: string, origin: DragPayload["origin"]) {
-    event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const requestedX = event.clientX || bounds.left + 28;
-    const requestedY = event.clientY || bounds.top + 24;
-    setFocusedPane(origin);
-    if (origin === "installed") setAvailableSelection(addonId);
-    else setGroupSelection(addonId);
-    setContextMenu({
-      addonId,
-      origin,
-      x: Math.max(8, Math.min(requestedX, window.innerWidth - 224)),
-      y: Math.max(8, Math.min(requestedY, window.innerHeight - 250)),
-    });
-  }
-
-  function handleKeyboard(event: KeyboardEvent<HTMLElement>) {
-    const target = event.target as HTMLElement;
-    if (target.matches("input, select, textarea") || target.isContentEditable) return;
-
-    if (event.key === "Escape") {
-      setContextMenu(null);
-      setSourcesOpen(false);
-      return;
-    }
-
-    if ((event.key === "Delete" || event.key === "Backspace") && focusedPane === "group" && groupSelection) {
-      event.preventDefault();
-      removeSelected(groupSelection);
-      setContextMenu(null);
-      return;
-    }
-
-    if (event.key === "Enter" && focusedPane === "installed" && availableSelection) {
-      event.preventDefault();
-      addSelected(availableSelection);
-    }
-  }
-
-  function beginDrag(event: DragEvent<HTMLButtonElement>, addonId: string, origin: DragPayload["origin"]) {
-    const addon = allAddons.find((candidate) => candidate.id === addonId);
-    if (origin === "installed" && !addon?.available) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.effectAllowed = origin === "installed" ? "copy" : "move";
-    event.dataTransfer.setData("text/plain", addonId);
-    setDragging({ addonId, origin });
-    setInstalledDropActive(false);
-  }
-
-  function finishDrag() {
-    setDragging(null);
-    setGroupDropIndex(null);
-    setInstalledDropActive(false);
-  }
-
-  function dropIntoGroup(event: DragEvent, requestedIndex: number) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!dragging) return;
-
-    updateActiveGroup((ids) => {
-      const existingIndex = ids.indexOf(dragging.addonId);
-      if (dragging.origin === "installed" && existingIndex >= 0) return ids;
-
-      const withoutDragged = ids.filter((id) => id !== dragging.addonId);
-      let insertionIndex = requestedIndex;
-      if (existingIndex >= 0 && existingIndex < requestedIndex) insertionIndex -= 1;
-      insertionIndex = Math.max(0, Math.min(insertionIndex, withoutDragged.length));
-      withoutDragged.splice(insertionIndex, 0, dragging.addonId);
-      return withoutDragged;
-    });
-    setGroupSelection(dragging.addonId);
-    finishDrag();
-  }
-
-  function dropIntoInstalled(event: DragEvent) {
-    event.preventDefault();
-    if (dragging?.origin === "group") removeSelected(dragging.addonId);
-    finishDrag();
-  }
-
-  function createGroup() {
-    setGroupEditor({ mode: "create", value: `New addon group ${groups.length + 1}` });
-  }
-
-  function openRenameGroup() { setGroupEditor({ mode: "rename", value: activeGroup.name }); }
-  function openDuplicateGroup() { setGroupEditor({ mode: "duplicate", value: `${activeGroup.name} copy` }); }
-  function commitGroupEditor() {
-    if (!groupEditor) return;
-    const name = groupEditor.value.trim();
-    if (!name || groups.some((group) => group.name.toLocaleLowerCase() === name.toLocaleLowerCase() && (groupEditor.mode !== "rename" || group.id !== activeGroup.id))) return;
-    if (groupEditor.mode === "rename") {
-      setGroups((current) => current.map((group) => group.id === activeGroup.id ? { ...group, name } : group));
-    } else {
-      const next: AddonGroup = { id: crypto.randomUUID(), name, addonIds: groupEditor.mode === "duplicate" ? [...activeGroup.addonIds] : [], source: null };
-      setGroups((current) => [...current, next]);
-      setActiveGroupId(next.id);
-    }
-    setGroupSelection(null); setGroupEditor(null);
-  }
-
-  function deleteActiveGroup() {
-    if (groups.length === 1) return;
-    const activeIndex = groups.findIndex((group) => group.id === activeGroupId);
-    const remaining = groups.filter((group) => group.id !== activeGroupId);
-    setGroups(remaining);
-    setActiveGroupId(remaining[Math.max(0, activeIndex - 1)].id);
-    setGroupSelection(null);
-  }
-
-  async function viewDlcInSteam(appId: number) {
-    setContextMenu(null);
-    await openUrl(`https://store.steampowered.com/app/${appId}`).catch(() => undefined);
-  }
-
-  async function viewWorkshopItem(workshopId: number) {
-    setContextMenu(null);
-    await openUrl(`https://steamcommunity.com/sharedfiles/filedetails/?id=${workshopId}`).catch(() => undefined);
-  }
-
-  async function launchGame() {
-    setIsLaunching(true);
+  async function launch(update: boolean) {
     setLaunchError(null);
+    if (update) {
+      for (const id of relevantPending) {
+        if (!await repos.synchronize(id)) { setLaunchError("The update didn't finish, so Arma wasn't started."); return; }
+      }
+      // Let the rescanned addon list reach the group before checking it.
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
+    const addons = groupAddonsRef.current;
+    const missing = addons.filter((addon) => !addon.available);
+    if (missing.length) { setLaunchError(`${plural(missing.length, "mod")} in this group ${missing.length === 1 ? "isn't" : "aren't"} available: ${missing.map((addon) => addon.label).join(", ")}.`); return; }
+    setIsLaunching(true);
     try {
-      await invoke("launch_arma", { selectedServerId, playerProfile: playerProfile || null, addons: groupAddons.map((addon) => ({
-        kind: addon.kind,
-        value: addon.kind === "dlc" ? addon.id.replace("dlc:", "") : addon.path,
-      })) });
+      await launcher.flush();
+      await invoke("launch_arma", {
+        selectedServerId: selection.selectedServerId,
+        playerProfile: selection.playerProfile || null,
+        addons: addons.map((addon) => ({ kind: addon.kind, value: addon.kind === "dlc" ? addon.id.replace("dlc:", "") : addon.path })),
+      });
     } catch (error) {
       setLaunchError(String(error));
     } finally {
@@ -619,439 +158,152 @@ export default function App() {
     }
   }
 
-  const receiveLaunchOptions = useCallback((next: OptionsView, dirty: boolean) => {
-    setLaunchOptions(next);
-    setConfigurationDirty(dirty);
-    setSelectedServerId((current) => {
-      if (!current || next.settings.servers.some((server) => server.id === current)) return current;
-      return null;
-    });
-    setPlayerProfile((current) => !current || next.settings.playerProfiles.includes(current) ? current : "");
-  }, []);
-
-  async function applyRepositoryModset(repositoryId: string, destination: string, modsetName: string, addonNames: string[]) {
-    const addonIds = addonNames.flatMap((name) => {
-      const normalized = name.toLocaleLowerCase();
-      const dlc = allAddons.find((addon) => addon.id === `dlc:${normalized}`);
-      if (dlc) return [dlc.id];
-      if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") return [];
-      const expectedId = `path:${destination.replace(/\/+$/, "")}/${name}`;
-      const installed = allAddons.find((addon) => addon.id === expectedId);
-      return [installed?.id ?? expectedId];
-    }).filter((id, index, items) => items.indexOf(id) === index);
-    const existing = groups.find((group) => group.source?.repositoryId === repositoryId && group.source.modsetName === modsetName);
-    if (existing) {
-      const members = new Set(addonIds);
-      const ordered = [...existing.addonIds.filter((id) => members.has(id)), ...addonIds.filter((id) => !existing.addonIds.includes(id))];
-      setGroups((current) => current.map((group) => group.id === existing.id ? { ...group, addonIds: ordered } : group));
-      setActiveGroupId(existing.id);
-      return { action: "updated", groupName: existing.name, addonCount: ordered.length };
+  const readiness = useMemo((): Readiness => {
+    const rows: ReadinessRow[] = [];
+    const proton = launcher.view?.environment.selectedProton ?? "Proton picked by Steam";
+    rows.push(arma === "found"
+      ? { id: "arma", status: "done", title: "Arma 3 found", sub: `${proton}. Prefix ${voice.status?.prefixInitialized ? "ready" : "not created yet, launch once"}` }
+      : arma === "locating"
+        ? { id: "arma", status: "doing", title: "Locating Arma 3", sub: "Looking through your Steam libraries" }
+        : { id: "arma", status: "exception", title: "Arma 3 not found", sub: "Install it in Steam and run it once with Proton", action: { label: "Check Again", run: () => void catalog.rescanAll(), disabled: catalog.isRescanning } });
+    for (const repository of repos.repositories) {
+      const status = repos.statusOf(repository.id);
+      const summary = repos.summaries[repository.id];
+      const busy = job !== null;
+      const see = { label: "See Changes", run: () => { setSelectedRepositoryId(repository.id); setScreen("repos"); } };
+      rows.push(status.status === "doing" && summary.transferFiles > 0 && !(job && "repositoryId" in job && job.repositoryId === repository.id)
+        ? { id: repository.id, status: "doing", title: `${repository.name} has an update`, sub: `${summary.changedAddons} of ${repos.stateOf(repository.id).selected.size} mods changed. ${bytes(summary.downloadBytes)}`, action: see }
+        : status.status === "todo"
+          ? { id: repository.id, status: "todo", title: `${repository.name} not checked yet`, sub: "Check to see if your unit published changes", action: { label: "Check", run: () => void repos.checkForUpdates(repository.id), disabled: busy } }
+          : status.status === "exception"
+            ? { id: repository.id, status: "exception", title: `${repository.name}: ${status.word.toLocaleLowerCase()}`, sub: status.sub, action: see }
+            : { id: repository.id, status: status.status, title: status.status === "done" ? `${repository.name} is up to date` : `${repository.name}: ${status.word.toLocaleLowerCase()}`, sub: status.sub });
     }
-    let name = modsetName.trim() || "Repository modset";
-    let suffix = 2;
-    while (groups.some((group) => group.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { name = `${modsetName} ${suffix++}`; }
-    const next: AddonGroup = { id: crypto.randomUUID(), name, addonIds, source: { repositoryId, modsetName } };
-    setGroups((current) => [...current, next]);
-    setActiveGroupId(next.id);
-    return { action: "created", groupName: next.name, addonCount: addonIds.length };
+    rows.push(voice.status?.ready
+      ? { id: "voice", status: "done", title: "Voice ready", sub: voice.status.teamspeakRunning ? "TeamSpeak is running" : "TeamSpeak is off", action: voice.status.teamspeakRunning ? undefined : { label: "Start TeamSpeak", run: () => void voice.startTeamSpeak(), disabled: voice.busy !== null } }
+      : { id: "voice", status: "todo", title: "Voice not set up", sub: `${voiceState.done} of 4 steps done. You can play, but radios won't work`, action: { label: "Set Up", run: () => setScreen("voice") } });
+    if (blockingUnavailable.length) rows.push({ id: "unavailable", status: "exception", title: `${plural(blockingUnavailable.length, "mod")} missing from ${activeGroup.name}`, sub: blockingUnavailable.map((addon) => addon.kind === "dlc" ? `${addon.label} (${addon.version})` : addon.label).join(", "), action: { label: "Open Mods", run: () => setScreen("mods") } });
+    for (const check of problems) rows.push({ id: `check-${check.id}`, status: "exception", title: check.label, sub: check.summary, action: { label: "Fix", run: () => setScreen("health") } });
+    if (launchError) rows.push({ id: "launch-error", status: "exception", title: "Last launch failed", sub: launchError, action: { label: "Open Health", run: () => setScreen("health") } });
+
+    const pendingSummaries = relevantPending.map((id) => ({ repository: repos.repositories.find((item) => item.id === id)!, summary: repos.summaries[id] }));
+    const pendingBytes = pendingSummaries.reduce((sum, item) => sum + item.summary.downloadBytes, 0);
+    const others = problems.length + blockingUnavailable.length;
+    const base = arma === "missing"
+      ? { status: "exception" as StatusKey, word: "Not ready", headline: "Arma 3 wasn't found", detail: "Install Arma 3 in Steam and run it once with Proton. Then check again." }
+      : arma === "locating"
+        ? { status: "doing" as StatusKey, word: "Checking", headline: "Looking for Arma 3", detail: "This takes a moment." }
+        : blockingUnavailable.length
+          ? { status: "exception" as StatusKey, word: "Not ready", headline: `${plural(blockingUnavailable.length, "mod")} missing`, detail: `${activeGroup.name} has mods that aren't installed. Sync the repository or remove them from the group.` }
+          : pendingSummaries.length
+            ? { status: "doing" as StatusKey, word: "Almost ready", headline: `${plural(pendingSummaries.length, "update")} before you play`, detail: `${pendingSummaries.map((item) => `${item.repository.name} changed ${plural(item.summary.changedAddons, "mod")}`).join(". ")}. ${bytes(pendingBytes)} to download.${others ? "" : " Everything else checks out."}` }
+            : problems.length
+              ? { status: "exception" as StatusKey, word: "Needs attention", headline: `${plural(problems.length, "problem")} to look at`, detail: "You can still launch. Health explains each one and how to fix it." }
+              : { status: "done" as StatusKey, word: "Ready", headline: "Ready to play", detail: `${activeGroup.name}. ${groupSummary(groupAddons)}${server ? `, joining ${server.name}` : ""}.` };
+    return { ...base, rows };
+  }, [arma, repos, voice.status, voice.busy, problems, blockingUnavailable, relevantPending, activeGroup, groupAddons, launchError, launcher.view, server, catalog.isRescanning, voiceState.done, job]);
+
+  const dock = ((): { status: StatusKey; word: string } => {
+    if (isLaunching) return { status: "doing", word: "Starting Arma 3" };
+    if (job?.kind === "sync") return { status: "doing", word: `Syncing ${syncPercent(job.progress)}%` };
+    if (job?.kind === "check") return { status: "doing", word: "Checking for updates" };
+    if (arma === "locating") return { status: "doing", word: "Locating Arma 3" };
+    if (arma === "missing") return { status: "exception", word: "Arma 3 not found" };
+    if (launchError) return { status: "exception", word: "Launch failed" };
+    if (blockingUnavailable.length) return { status: "exception", word: blockingUnavailable.every((addon) => addon.kind === "dlc") ? "DLC required" : "Mods missing" };
+    if (repos.pendingIds.length) return { status: "doing", word: `${plural(repos.pendingIds.length, "update")} pending` };
+    if (problems.length) return { status: "exception", word: plural(problems.length, "problem") };
+    return { status: "done", word: "Ready" };
+  })();
+
+  const launchBlocked = isLaunching || syncing || arma === "missing" || blockingUnavailable.length > 0;
+  const launchTitle = arma === "missing" ? "Arma 3 wasn't found" : blockingUnavailable.length ? "Some mods in this group aren't installed" : syncing ? "Wait for the sync to finish" : launchError ?? "Launch Arma 3";
+
+  const groupItems: MenuEntry[] = groups.groups.map((group) => ({ label: group.name, sub: idSummary(group.addonIds), checked: group.id === activeGroup.id, onSelect: () => groups.setActiveGroupId(group.id) }));
+  const serverItems: MenuEntry[] = [
+    { label: "No server", sub: "Start at the main menu", checked: !selection.selectedServerId, onSelect: () => selection.setSelectedServerId(null) },
+    ...(launcher.settings?.servers ?? []).map((item) => ({ label: item.name, sub: `${item.address}:${item.port}`, checked: item.id === selection.selectedServerId, onSelect: () => selection.setSelectedServerId(item.id) })),
+    "separator",
+    { label: "Manage Servers", onSelect: () => setScreen("launch") },
+  ];
+  const profileItems: MenuEntry[] = [
+    { label: "Automatic", sub: "Arma picks the profile", checked: !selection.playerProfile, onSelect: () => selection.setPlayerProfile("") },
+    ...(launcher.settings?.playerProfiles ?? []).map((profile) => ({ label: profile, checked: profile === selection.playerProfile, onSelect: () => selection.setPlayerProfile(profile) })),
+    "separator",
+    { label: "Manage Profiles", onSelect: () => setScreen("launch") },
+  ];
+  const groupLabel = `${activeGroup.name}. ${groupSummary(groupAddons)}`;
+  const serverLabel = server?.name ?? "No server";
+  const profileLabel = selection.playerProfile || "Automatic profile";
+
+  function navigate(event: KeyboardEvent<HTMLElement>) {
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const index = screens.findIndex((item) => item.id === screen);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? screens.length - 1 : (index + (event.key === "ArrowDown" ? 1 : screens.length - 1)) % screens.length;
+    setScreen(screens[next].id);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>(".k-nav-item")[next]?.focus();
   }
 
-  return (
-    <main className="app-shell" onKeyDown={handleKeyboard} onPointerDown={() => setContextMenu(null)}>
-      <ResizeGrips />
-      <header className="titlebar" data-tauri-drag-region onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest(".window-controls")) void getCurrentWindow().toggleMaximize(); }}>
-        <div className="brand" data-tauri-drag-region>
-          <img className="brand-mark" src={appIconUrl} alt="" draggable={false} data-tauri-drag-region />
-          <span data-tauri-drag-region>
-            <strong>Armasync</strong>
-          </span>
-        </div>
-        <div className="titlebar-right">
-          <div className="game-state" data-tauri-drag-region><span className={`status-dot ${dlcDetection.gameDirectory ? "" : "warning"}`} /> {dlcDetection.gameDirectory ? "Arma 3 detected" : "Locating Arma 3"}</div>
-          <div className="window-controls">
-            <button type="button" aria-label="Minimize window" title="Minimize" onClick={() => void getCurrentWindow().minimize()}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5h10"/></svg></button>
-            <button type="button" aria-label="Maximize window" title="Maximize" onClick={() => void getCurrentWindow().toggleMaximize()}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9"/></svg></button>
-            <button className="window-close" type="button" aria-label="Close window" title="Close" onClick={() => void getCurrentWindow().close()}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
-          </div>
-        </div>
-      </header>
+  const updateLabel = syncing ? `Syncing ${syncPercent(job.progress)}%` : isLaunching ? "Starting…" : "Update And Launch";
 
-      <nav className="tabs" aria-label="Main navigation" onKeyDown={(event) => {
-        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
-        event.preventDefault();
-        const index = tabs.indexOf(activeTab);
-        const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
-        setActiveTab(tabs[nextIndex]);
-        (event.currentTarget.children[nextIndex] as HTMLButtonElement | undefined)?.focus();
-      }}>
-        {tabs.map((tab) => (
-          <button key={tab} type="button" className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>{tab}</button>
-        ))}
-      </nav>
+  return <div className="as-app">
+    <ResizeGrips />
+    <nav className="as-rail" aria-label="Main" onKeyDown={navigate} data-tauri-drag-region>
+      <span className="label as-mark" data-tauri-drag-region>A3</span>
+      {screens.map((item) => <button key={item.id} type="button" className="k-nav-item as-nav-item" aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
+        <span className="k-nav-pill"><Icon name={item.icon} /></span>{item.label}
+      </button>)}
+      <span className="as-grow" data-tauri-drag-region />
+      <button type="button" className="k-btn k-btn-icon" aria-label="Display settings" title="Display" onClick={() => setDisplayOpen(true)}><Icon name="more" /></button>
+    </nav>
 
-      {activeTab === "Addons" && (
-        <section className="workspace">
-          <div className="workspace-heading">
-            <div>
-              <h1>Addons</h1>
-              <p>Build and arrange the addon groups used when launching Arma 3.</p>
-            </div>
-            <div className="heading-actions">
-              <button className="button quiet" type="button" onClick={() => { setSourcesOpen(true); void refreshSources(); }}><Icon name="folders" /> Sources</button>
-              <button className="button quiet" type="button" disabled={!dlcDetection.gameDirectory} onClick={() => dlcDetection.gameDirectory && void openPath(dlcDetection.gameDirectory)}><Icon name="folder" /> Open addon folder</button>
-              <button className="button quiet" type="button" disabled={isRescanning} onClick={() => void rescanAll()}><Icon name="refresh" /> {isRescanning ? "Scanning…" : "Rescan"}</button>
-            </div>
-          </div>
+    <div className="as-body">
+      <WindowBar />
+      <main className="as-main">
+        {screen === "play" && <Play readiness={readiness}
+          pickers={<>
+            <PickerRow label="Mods" value={groupLabel} items={groupItems} />
+            <PickerRow label="Server" value={serverLabel} items={serverItems} />
+            <PickerRow label="Profile" value={profileLabel} items={profileItems} />
+          </>}
+          launchButtons={relevantPending.length
+            ? <>
+              <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={isLaunching || syncing || arma === "missing" || blockingUnavailable.length > 0} onClick={() => void launch(true)}><Icon name="skip" />{updateLabel}</button>
+              <button type="button" className="k-btn k-btn-quiet" disabled={launchBlocked || unavailable.length > 0} title={unavailable.length ? "Some mods need the update first" : undefined} onClick={() => void launch(false)}>Launch Without Updating</button>
+            </>
+            : <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="skip" />{syncing ? `Syncing ${syncPercent(job.progress)}%` : isLaunching ? "Starting…" : "Launch"}</button>}
+          launchNote={relevantPending.length ? "Outdated mods may not match the server." : null} />}
+        {screen === "mods" && <Mods catalog={catalog} groups={groups} repositories={repos.repositories} onOpenSources={openSources} />}
+        {screen === "repos" && <Repos repos={repos} groups={groups.groups} selectedId={selectedRepositoryId} onSelect={setSelectedRepositoryId} onAdd={() => setAddRepositoryOpen(true)} onApplyModset={groups.applyRepositoryModset} />}
+        {screen === "voice" && <Voice voice={voice} onOpenSources={openSources} />}
+        {screen === "launch" && <Launch launcher={launcher} playerProfile={selection.playerProfile} onChooseProfile={selection.setPlayerProfile} />}
+        {screen === "health" && <Health health={health} go={{ voice: () => setScreen("voice"), sources: openSources }} />}
+      </main>
 
-          {missingDeps.length > 0 && !depsDismissed && (
-            <div className="system-setup-notice">
-              <div><strong>System setup</strong><span>Some host tools Armasync relies on are missing — the related features stay disabled until they're installed.</span></div>
-              <ul>
-                {missingDeps.map((dep) => <li key={dep.id}><strong>{dep.label}</strong> — needed for {dep.purpose}. {dep.hint}</li>)}
-              </ul>
-              <button className="icon-button" type="button" aria-label="Dismiss system setup notice" title="Dismiss" onClick={() => setDepsDismissed(true)}><Icon name="close" /></button>
-            </div>
-          )}
+      {screen !== "play" && <footer className="as-dock" aria-label="Launch">
+        <button type="button" className="as-dock-status" title={launchError ?? "Open Play"} onClick={() => setScreen("play")}><Status status={dock.status} cut="var(--surface)">{dock.word}</Status></button>
+        <span className="as-grow" />
+        <MenuButton label="Addon group used at launch" items={groupItems}>{groupLabel}</MenuButton>
+        <MenuButton label="Server used at launch" items={serverItems}>{serverLabel}</MenuButton>
+        <MenuButton label="Profile used at launch" items={profileItems}>{profileLabel}</MenuButton>
+        <button type="button" className="k-btn k-btn-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="skip" />{isLaunching ? "Starting…" : "Launch"}</button>
+      </footer>}
+    </div>
 
-          <div className="addon-layout">
-            <section
-              className={`panel available-panel ${installedDropActive ? "drop-target" : ""}`}
-              onDragOver={(event) => {
-                if (dragging?.origin !== "group") return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                setInstalledDropActive(true);
-              }}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setInstalledDropActive(false);
-              }}
-              onDrop={dropIntoInstalled}
-            >
-              <header className="panel-header">
-                <div>
-                  <h2>Installed addons</h2>
-                  <span>{dragging?.origin === "group" ? "Drop here to remove from group" : `${installedMods.length} mods · ${installedDlcCount} DLC ready`}</span>
-                </div>
-              </header>
-              <div className="filters">
-                <label className="search-field">
-                  <Icon name="search" />
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter installed addons" aria-label="Filter installed addons" />
-                </label>
-                <select value={source} onChange={(event) => setSource(event.target.value)} aria-label="Filter by source">
-                  <option>All sources</option>
-                  <option>DLC</option>
-                  <option>Repository</option>
-                  <option>Workshop</option>
-                  <option>Local</option>
-                </select>
-              </div>
-              <div className="column-labels"><span>Addon</span></div>
-              <div className="addon-list">
-                {filteredMods.length > 0 && <div className="list-section-label"><span>Mods</span><span>{filteredMods.length} shown</span></div>}
-                {filteredMods.map((addon) => (
-                  <AddonRow
-                    key={addon.id}
-                    addon={addon}
-                    selected={availableSelection === addon.id}
-                    dragging={dragging?.origin === "installed" && dragging.addonId === addon.id}
-                    onClick={() => setAvailableSelection(addon.id)}
-                    onDoubleClick={() => addSelected(addon.id)}
-                    onFocus={() => { setFocusedPane("installed"); setAvailableSelection(addon.id); }}
-                    onContextMenu={(event) => openContextMenu(event, addon.id, "installed")}
-                    onDragStart={(event) => beginDrag(event, addon.id, "installed")}
-                    onDragEnd={finishDrag}
-                    onQuickAction={() => addSelected(addon.id)}
-                    quickActionLabel="Add to group"
-                  />
-                ))}
-                {filteredDlcs.length > 0 && <div className="list-section-label"><span>DLC &amp; Creator DLC</span><span>{installedDlcCount} ready</span></div>}
-                {filteredDlcs.map((addon) => (
-                  <AddonRow
-                    key={addon.id}
-                    addon={addon}
-                    selected={availableSelection === addon.id}
-                    dragging={dragging?.origin === "installed" && dragging.addonId === addon.id}
-                    canDrag={addon.available}
-                    onClick={() => setAvailableSelection(addon.id)}
-                    onDoubleClick={() => addon.available && addSelected(addon.id)}
-                    onFocus={() => { setFocusedPane("installed"); setAvailableSelection(addon.id); }}
-                    onContextMenu={(event) => openContextMenu(event, addon.id, "installed")}
-                    onDragStart={(event) => beginDrag(event, addon.id, "installed")}
-                    onDragEnd={finishDrag}
-                    onQuickAction={addon.available ? () => addSelected(addon.id) : undefined}
-                    quickActionLabel="Add to group"
-                  />
-                ))}
-                {filteredAddons.length === 0 && <div className="empty-state">No installed addons match this filter.</div>}
-              </div>
-              <footer className="panel-footer">
-                <SourceIcon source="Repository" withLabel />
-                <SourceIcon source="Workshop" withLabel />
-                <SourceIcon source="Local" withLabel />
-                <SourceIcon source="DLC" withLabel />
-                {dlcScanError && <span className="scan-error" title={dlcScanError}>DLC scan unavailable</span>}
-                {catalogError && <span className="scan-error" title={catalogError}>Addon scan unavailable</span>}
-              </footer>
-            </section>
-
-            <section
-              className={`panel groups-panel ${dragging ? "accepts-drop" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = dragging?.origin === "installed" ? "copy" : "move";
-                setGroupDropIndex(activeGroup.addonIds.length);
-              }}
-              onDrop={(event) => dropIntoGroup(event, activeGroup.addonIds.length)}
-            >
-              <header className="panel-header group-header">
-                <div>
-                  <h2>Addon group</h2>
-                  <span>Saved launch preset · Drag to arrange</span>
-                </div>
-                <div className="group-actions">
-                  <button type="button" title="Create addon group" onClick={createGroup}><Icon name="plus" /></button>
-                  <button type="button" title="Rename addon group" onClick={openRenameGroup}><Icon name="edit" /></button>
-                  <button type="button" title="Duplicate addon group" onClick={openDuplicateGroup}><Icon name="copy" /></button>
-                  <button type="button" title="Delete addon group" disabled={groups.length === 1} onClick={deleteActiveGroup}><Icon name="trash" /></button>
-                </div>
-              </header>
-              <div className="group-select-wrap">
-                <select value={activeGroupId} onChange={(event) => { setActiveGroupId(event.target.value); setGroupSelection(null); }} aria-label="Current addon group">
-                  {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>
-                <span title={activeGroup.source ? `Linked to ${activeGroup.source.modsetName}` : undefined}>{groupAddons.filter((addon) => addon.kind === "mod").length} mods · {groupAddons.filter((addon) => addon.kind === "dlc").length} DLC{activeGroup.source ? " · Linked modset" : ""}</span>
-              </div>
-              <div className="column-labels"><span>Load order</span></div>
-              <div className="addon-list group-list">
-                {groupAddons.map((addon, index) => (
-                  <AddonRow
-                    key={addon.id}
-                    addon={addon}
-                    order={index}
-                    selected={groupSelection === addon.id}
-                    dragging={dragging?.origin === "group" && dragging.addonId === addon.id}
-                    dropBefore={groupDropIndex === index && dragging?.addonId !== addon.id}
-                    onClick={() => setGroupSelection(addon.id)}
-                    onDoubleClick={() => removeSelected(addon.id)}
-                    onFocus={() => { setFocusedPane("group"); setGroupSelection(addon.id); }}
-                    onContextMenu={(event) => openContextMenu(event, addon.id, "group")}
-                    onDragStart={(event) => beginDrag(event, addon.id, "group")}
-                    onDragEnd={finishDrag}
-                    onQuickAction={() => removeSelected(addon.id)}
-                    quickActionLabel="Remove from group"
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      event.dataTransfer.dropEffect = dragging?.origin === "installed" ? "copy" : "move";
-                      setGroupDropIndex(index);
-                    }}
-                    onDrop={(event) => dropIntoGroup(event, index)}
-                  />
-                ))}
-                {groupDropIndex === groupAddons.length && groupAddons.length > 0 && dragging && <div className="drop-at-end" />}
-                {groupAddons.length === 0 && (
-                  <div className="empty-state group-empty"><strong>This group is empty</strong><span>Select an installed addon and add it here.</span></div>
-                )}
-              </div>
-              <footer className="panel-footer order-footer">
-                <span className={groupSaveError ? "scan-error" : ""} title={groupSaveError ?? undefined}>{groupSaveError ? "Could not save addon groups" : groupsLoaded ? "Saved automatically" : "Loading groups…"}</span>
-                <span>Drag to reorder · Delete to remove</span>
-              </footer>
-            </section>
-          </div>
-        </section>
-      )}
-      <RepositoryView active={activeTab === "Repositories"} defaultDestination={dlcDetection.gameDirectory} addonGroups={groups.map((group) => ({ id: group.id, name: group.name, source: group.source }))} onApplyModset={applyRepositoryModset} onSynchronized={async () => { await scanAddonCatalog(); }} />
-      <VoiceView active={activeTab === "Voice"} />
-      <LauncherOptionsView active={activeTab === "Configuration"} onOptionsChanged={receiveLaunchOptions} />
-      <TroubleshootingView active={activeTab === "Troubleshooting"} />
-
-      <footer className="launchbar">
-        <div className="launch-choices">
-          <label className="launch-choice">
-            <span>Addons</span>
-            <select value={activeGroupId} aria-label="Addon group used at launch" onChange={(event) => { setActiveGroupId(event.target.value); setGroupSelection(null); }}>
-              {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-            </select>
-          </label>
-          <label className="launch-choice">
-            <span>Server</span>
-            <select value={selectedServerId ?? ""} aria-label="Server used at launch" onChange={(event) => setSelectedServerId(event.target.value || null)}>
-              <option value="">No server</option>
-              {launchOptions?.settings.servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-            </select>
-          </label>
-          <label className="launch-choice">
-            <span>Profile</span>
-            <select value={playerProfile} aria-label="Player profile used at launch" onChange={(event) => setPlayerProfile(event.target.value)}>
-              <option value="">Automatic</option>
-              {launchOptions?.settings.playerProfiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="launch-summary">
-          <span title={launchError ?? undefined}>{launchError ? "Launch failed — see Troubleshooting" : `${groupAddons.length} addons`}</span>
-          <span className="separator" />
-          <span>{launchOptions?.environment.selectedProton ?? "Proton"}</span>
-          {teamspeakInstalled && <button className={`ts-button ${teamspeakRunning ? "running" : ""}`} type="button" disabled={teamspeakBusy || teamspeakRunning} title={teamspeakError ?? (teamspeakRunning ? "TeamSpeak is running" : "Start TeamSpeak for ACRE voice")} onClick={() => void startTeamSpeak()}><Icon name="voice" /> {teamspeakRunning ? "Voice on" : teamspeakBusy ? "Starting…" : "TeamSpeak"}</button>}
-          <button className="launch-button" type="button" disabled={configurationDirty || unavailableGroupAddons.length > 0 || isLaunching} title={configurationDirty ? "Save Configuration changes before launching" : unavailableGroupAddons.length ? "This group contains unavailable DLC" : launchError ?? "Launch game"} onClick={() => void launchGame()}><Icon name="play" /> {configurationDirty ? "Save configuration" : unavailableGroupAddons.length ? "DLC required" : isLaunching ? "Starting…" : "Launch game"}</button>
-        </div>
-      </footer>
-
-      {groupEditor && <>
-        <button className="drawer-scrim" type="button" aria-label="Cancel addon group editing" onClick={() => setGroupEditor(null)}/>
-        <aside className="group-editor-dialog" onPointerDown={(event) => event.stopPropagation()}>
-          <span className="eyebrow">Addon group</span>
-          <h2>{groupEditor.mode === "create" ? "Create group" : groupEditor.mode === "rename" ? "Rename group" : "Duplicate group"}</h2>
-          <p>{groupEditor.mode === "duplicate" ? "The copied group keeps the current addon order but is no longer linked to a repository modset." : "Choose a clear name for this launch preset."}</p>
-          <label><span>Group name</span><input value={groupEditor.value} onChange={(event) => setGroupEditor({ ...groupEditor, value: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") commitGroupEditor(); }} autoFocus maxLength={100}/></label>
-          {groups.some((group) => group.name.toLocaleLowerCase() === groupEditor.value.trim().toLocaleLowerCase() && (groupEditor.mode !== "rename" || group.id !== activeGroup.id)) && <small className="group-name-error">That group name is already in use.</small>}
-          <footer><button type="button" onClick={() => setGroupEditor(null)}>Cancel</button><button className="button primary-small" type="button" disabled={!groupEditor.value.trim() || groups.some((group) => group.name.toLocaleLowerCase() === groupEditor.value.trim().toLocaleLowerCase() && (groupEditor.mode !== "rename" || group.id !== activeGroup.id))} onClick={commitGroupEditor}>{groupEditor.mode === "create" ? "Create" : groupEditor.mode === "rename" ? "Rename" : "Duplicate"}</button></footer>
-        </aside>
-      </>}
-
-      {sourcesOpen && <>
-        <button className="drawer-scrim" type="button" aria-label="Close addon sources" onClick={() => setSourcesOpen(false)} />
-        <aside className="sources-drawer" aria-label="Addon search directories">
-          <header className="drawer-header">
-            <div>
-              <span className="eyebrow">Addon search directories</span>
-              <h2>Sources</h2>
-              <p>Folders are scanned in priority order from top to bottom.</p>
-            </div>
-            <button className="icon-button" type="button" aria-label="Close" onClick={() => setSourcesOpen(false)}><Icon name="close" /></button>
-          </header>
-
-          <div className="source-summary">
-            <span><strong>{addonSources.filter((source_) => source_.enabled).length}</strong> active sources</span>
-            <span><strong>{addonSources.reduce((total, source_) => total + source_.addonCount, 0)}</strong> addon roots found</span>
-          </div>
-
-          <div className="source-list" onDragOver={(event) => { event.preventDefault(); setSourceDropIndex(addonSources.length); }} onDrop={(event) => { event.preventDefault(); void reorderSources(addonSources.length); }}>
-            {addonSources.map((source_, index) => (
-              <div
-                className={`source-card ${source_.enabled ? "" : "disabled"} ${source_.status !== "ready" && source_.status !== "disabled" ? "problem" : ""} ${draggedSourceId === source_.id ? "dragging" : ""} ${sourceDropIndex === index && draggedSourceId !== source_.id ? "drop-before" : ""}`}
-                key={source_.id}
-                draggable
-                onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggedSourceId(source_.id); }}
-                onDragEnd={() => { setDraggedSourceId(null); setSourceDropIndex(null); }}
-                onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setSourceDropIndex(index); }}
-                onDrop={(event) => { event.preventDefault(); event.stopPropagation(); void reorderSources(index); }}
-              >
-                <span className="source-grip" title="Drag to change priority"><Icon name="grip" /></span>
-                <span className={`source-kind-icon ${source_.kind}`}>
-                  <Icon name={source_.kind === "workshop" ? "cloud" : source_.kind === "game" ? "computer" : "folder"} />
-                </span>
-                <div className="source-details">
-                  <div className="source-title">
-                    <strong>{source_.name}</strong>
-                  </div>
-                  <code title={source_.path}>{source_.path}</code>
-                  <div className="source-card-meta">
-                    <span className={`source-health ${source_.status}`} />
-                    <span>{sourceStatusLabels[source_.status]}</span>
-                    <i />
-                    <span>{source_.addonCount} addon{source_.addonCount === 1 ? "" : "s"}</span>
-                  </div>
-                </div>
-                <div className="source-actions">
-                  <label className="source-toggle" title={source_.enabled ? "Disable source" : "Enable source"}>
-                    <input type="checkbox" checked={source_.enabled} disabled={sourceBusy} onChange={() => void mutateSources("set_addon_source_enabled", { id: source_.id, enabled: !source_.enabled })} />
-                    <span />
-                  </label>
-                  <button type="button" title="Open folder" onClick={() => void openPath(source_.path)}><Icon name="folder" /></button>
-                  <button className="remove-source" type="button" title="Remove search directory (files are kept)" disabled={sourceBusy} onClick={() => void mutateSources("remove_addon_source", { id: source_.id })}><Icon name="trash" /></button>
-                </div>
-              </div>
-            ))}
-            {sourceDropIndex === addonSources.length && draggedSourceId && <div className="source-drop-end" />}
-            {!addonSources.length && !sourceBusy && <div className="sources-empty">No addon directories have been configured.</div>}
-          </div>
-
-          {sourceError && <div className="source-error" role="alert">{sourceError}</div>}
-
-          <footer className="drawer-footer">
-            <div>
-              <strong>Controlled scanning</strong>
-              <span>Only direct addon roots are inspected. Subdirectory trees are not crawled recursively.</span>
-            </div>
-            <div className="drawer-footer-actions">
-              {!addonSources.some((source_) => source_.kind === "workshop") && <button className="button quiet" type="button" disabled={sourceBusy} onClick={() => void mutateSources("add_steam_workshop_source", {})}><Icon name="cloud" /> Add Workshop</button>}
-              <button className="button quiet" type="button" disabled={sourceBusy || isRescanning} onClick={() => void rescanAll()}><Icon name="refresh" /> {isRescanning ? "Scanning…" : "Rescan"}</button>
-              <button className="button primary-small" type="button" disabled={sourceBusy} onClick={() => void addSource()}><Icon name="plus" /> Add directory</button>
-            </div>
-          </footer>
-        </aside>
-      </>}
-
-      {contextMenu && (() => {
-        const addon = allAddons.find((candidate) => candidate.id === contextMenu.addonId);
-        if (!addon) return null;
-        const alreadyAdded = activeGroup.addonIds.includes(addon.id);
-        const groupIndex = activeGroup.addonIds.indexOf(addon.id);
-        return (
-          <div
-            className="context-menu"
-            role="menu"
-            aria-label={`Actions for ${addon.name}`}
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <div className="context-heading">
-              <SourceIcon source={addon.source} />
-              <span><strong>{addon.name}</strong><small>{addon.folder}</small></span>
-            </div>
-            {contextMenu.origin === "installed" ? (
-              <>
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={alreadyAdded || !addon.available}
-                  onClick={() => { addSelected(addon.id); setContextMenu(null); }}
-                >
-                  <span>{alreadyAdded ? "Already in this group" : !addon.available ? (addon.version ?? "Unavailable") : `Add to ${activeGroup.name}`}</span>
-                  {!alreadyAdded && addon.available && <kbd>Enter</kbd>}
-                </button>
-                {addon.path && <button type="button" role="menuitem" onClick={() => { setContextMenu(null); void openPath(addon.path!); }}>
-                  <span>Open addon folder</span><Icon name="folder" />
-                </button>}
-                {addon.workshopId && <button type="button" role="menuitem" onClick={() => void viewWorkshopItem(addon.workshopId!)}>
-                  <span>View Workshop page</span><Icon name="external" />
-                </button>}
-                {addon.steamAppId && <>
-                  <div className="context-separator" />
-                  <button type="button" role="menuitem" onClick={() => void viewDlcInSteam(addon.steamAppId!)}>
-                    <span>View DLC on Steam</span><Icon name="external" />
-                  </button>
-                </>}
-              </>
-            ) : (
-              <>
-                <button type="button" role="menuitem" disabled={groupIndex === 0} onClick={() => moveAddonToBoundary(addon.id, "top")}>
-                  <span>Move to top</span>
-                </button>
-                <button type="button" role="menuitem" disabled={groupIndex === activeGroup.addonIds.length - 1} onClick={() => moveAddonToBoundary(addon.id, "bottom")}>
-                  <span>Move to bottom</span>
-                </button>
-                {addon.steamAppId && <button type="button" role="menuitem" onClick={() => void viewDlcInSteam(addon.steamAppId!)}>
-                  <span>View DLC on Steam</span><Icon name="external" />
-                </button>}
-                {addon.path && <button type="button" role="menuitem" onClick={() => { setContextMenu(null); void openPath(addon.path!); }}>
-                  <span>Open addon folder</span><Icon name="folder" />
-                </button>}
-                {addon.workshopId && <button type="button" role="menuitem" onClick={() => void viewWorkshopItem(addon.workshopId!)}>
-                  <span>View Workshop page</span><Icon name="external" />
-                </button>}
-                <div className="context-separator" />
-                <button className="context-remove" type="button" role="menuitem" onClick={() => { removeSelected(addon.id); setContextMenu(null); }}>
-                  <span>Remove from group</span><kbd>Delete</kbd>
-                </button>
-              </>
-            )}
-          </div>
-        );
-      })()}
-    </main>
-  );
+    <Sources open={sourcesOpen} onClose={() => setSourcesOpen(false)} catalog={catalog} repositories={repos.repositories} />
+    <AddRepository open={addRepositoryOpen} onClose={() => setAddRepositoryOpen(false)} repos={repos} onAdded={(id) => {
+      setAddRepositoryOpen(false);
+      setSelectedRepositoryId(id);
+      setScreen("repos");
+      // Add And Download: read the manifest, check every mod, then sync what's missing.
+      void (async () => {
+        if (await repos.checkForUpdates(id, true)) {
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          await repos.synchronize(id);
+        }
+      })();
+    }} />
+    <DisplaySheet open={displayOpen} onClose={() => setDisplayOpen(false)} theme={theme} setTheme={setTheme} />
+  </div>;
 }
