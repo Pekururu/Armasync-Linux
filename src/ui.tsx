@@ -4,9 +4,17 @@ import { createPortal } from "react-dom";
 
 export type { StatusKey };
 
-/** A KalmUI icon. The set has no play or headset icon: Play uses `skip`, Voice uses `spark`. */
+/** Icons KalmUI doesn't have, drawn on its 24px grid with its 2px stroke. */
+const EXTRA_ICONS: Record<string, string> = {
+  play: '<path d="M7.5 5.5v13l11-6.5z" fill="currentColor"/>',
+  radio: '<rect x="6.5" y="8.5" width="11" height="13" rx="2.5"/><path d="M9.5 8.5V5.5M14.5 8.5V2.5"/><rect x="9.5" y="11.5" width="5" height="2.5" rx=".5" fill="currentColor" stroke="none"/><circle cx="9.5" cy="17.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="17.5" r="1" fill="currentColor" stroke="none"/>',
+};
+
+/** A KalmUI icon, or one of `EXTRA_ICONS` inside KalmUI's own `<svg>` wrapper. */
 export function Icon({ name }: { name: string }) {
-  return <span className="as-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: window.KalmUI.icon(name) }} />;
+  const extra = EXTRA_ICONS[name];
+  const html = extra ? window.KalmUI.icon("").replace("</svg>", `${extra}</svg>`) : window.KalmUI.icon(name);
+  return <span className="as-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 /** Status is always shape plus word. Leave out `children` only where a title beside it carries the word. */

@@ -20,10 +20,10 @@ import { Icon, type MenuEntry, MenuButton, Sheet, Status, type StatusKey } from 
 type Screen = "play" | "mods" | "repos" | "voice" | "launch" | "health";
 
 const screens: { id: Screen; label: string; icon: string }[] = [
-  { id: "play", label: "Play", icon: "skip" },
+  { id: "play", label: "Play", icon: "play" },
   { id: "mods", label: "Mods", icon: "list" },
   { id: "repos", label: "Repos", icon: "empty" },
-  { id: "voice", label: "Voice", icon: "spark" },
+  { id: "voice", label: "Voice", icon: "radio" },
   { id: "launch", label: "Launch", icon: "settings" },
   { id: "health", label: "Health", icon: "focus" },
 ];
@@ -270,10 +270,10 @@ export default function App() {
           </>}
           launchButtons={relevantPending.length
             ? <>
-              <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={isLaunching || syncing || arma === "missing" || blockingUnavailable.length > 0} onClick={() => void launch(true)}><Icon name="skip" />{updateLabel}</button>
+              <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={isLaunching || syncing || arma === "missing" || blockingUnavailable.length > 0} onClick={() => void launch(true)}><Icon name="play" />{updateLabel}</button>
               <button type="button" className="k-btn k-btn-quiet" disabled={launchBlocked || unavailable.length > 0} title={unavailable.length ? "Some mods need the update first" : undefined} onClick={() => void launch(false)}>Launch Without Updating</button>
             </>
-            : <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="skip" />{syncing ? `Syncing ${syncPercent(job.progress)}%` : isLaunching ? "Starting…" : "Launch"}</button>}
+            : <button type="button" className="k-btn k-btn-primary as-launch-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="play" />{syncing ? `Syncing ${syncPercent(job.progress)}%` : isLaunching ? "Starting…" : "Launch"}</button>}
           launchNote={relevantPending.length ? "Outdated mods may not match the server." : null} />}
         {screen === "mods" && <Mods catalog={catalog} groups={groups} repositories={repos.repositories} onOpenSources={openSources} />}
         {screen === "repos" && <Repos repos={repos} groups={groups.groups} selectedId={selectedRepositoryId} onSelect={setSelectedRepositoryId} onAdd={() => setAddRepositoryOpen(true)} onApplyModset={groups.applyRepositoryModset} />}
@@ -288,7 +288,7 @@ export default function App() {
         <MenuButton label="Addon group used at launch" items={groupItems}>{groupLabel}</MenuButton>
         <MenuButton label="Server used at launch" items={serverItems}>{serverLabel}</MenuButton>
         <MenuButton label="Profile used at launch" items={profileItems}>{profileLabel}</MenuButton>
-        <button type="button" className="k-btn k-btn-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="skip" />{isLaunching ? "Starting…" : "Launch"}</button>
+        <button type="button" className="k-btn k-btn-primary" disabled={launchBlocked} title={launchTitle} onClick={() => void launch(false)}><Icon name="play" />{isLaunching ? "Starting…" : "Launch"}</button>
       </footer>}
     </div>
 
