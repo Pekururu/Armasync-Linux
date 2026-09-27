@@ -30,6 +30,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version-file: .node-version
+          # This job has no pnpm; the packageManager field would make setup-node look for it.
+          package-manager-cache: false
 
       - name: Check commits and prepare release version
         id: check
