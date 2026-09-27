@@ -60,8 +60,8 @@ pub fn report() -> DiagnosticReport {
         } else {
             DiagnosticStatus::Warning
         },
-        summary: crate::steam::selected_proton().unwrap_or_else(|| "Not forced in Steam".into()),
-        detail: "Steam controls the compatibility tool used for Arma 3.".into(),
+        summary: crate::steam::selected_proton().unwrap_or_else(|| "Not set in Steam".into()),
+        detail: "Steam controls the compatibility tool used for Arma 3. Set one under Arma 3 → Properties → Compatibility, or as Steam's default under Settings → Compatibility.".into(),
     });
     let sources = crate::sources::list().unwrap_or_default();
     let usable_sources = sources
@@ -328,14 +328,76 @@ fn vulkan_check() -> DiagnosticCheck {
                 .unwrap_or("vulkaninfo failed")
                 .into(),
         },
-        Err(error) => DiagnosticCheck {
-            id: "vulkan".into(),
-            label: "Graphics renderer".into(),
-            status: DiagnosticStatus::Fail,
-            summary: "Vulkan check unavailable".into(),
-            detail: error.to_string(),
-        },
+        // Without vulkan-tools, fall back to the installed Vulkan drivers.
+        Err(_) => {
+            let drivers = vulkan_drivers(&installed_vulkan_manifests());
+            if drivers.is_empty() {
+                DiagnosticCheck {
+                    id: "vulkan".into(),
+                    label: "Graphics renderer".into(),
+                    status: DiagnosticStatus::Fail,
+                    summary: "No Vulkan driver found".into(),
+                    detail: "Install your graphics card's Vulkan driver: vulkan-radeon or vulkan-intel from Mesa, or the NVIDIA driver.".into(),
+                }
+            } else {
+                DiagnosticCheck {
+                    id: "vulkan".into(),
+                    label: "Graphics renderer".into(),
+                    status: DiagnosticStatus::Pass,
+                    summary: format!("Vulkan driver installed: {}", drivers.join(", ")),
+                    detail: "Install vulkan-tools for a full check.".into(),
+                }
+            }
+        }
     }
+}
+
+/// File names of the Vulkan driver manifests the loader would find.
+fn installed_vulkan_manifests() -> Vec<String> {
+    let mut directories = vec![PathBuf::from("/etc/vulkan/icd.d")];
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+    directories.extend(data_home);
+    let data_dirs = std::env::var("XDG_DATA_DIRS")
+        .ok()
+        .filter(|dirs| !dirs.is_empty())
+        .unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    directories.extend(data_dirs.split(':').map(PathBuf::from));
+    directories
+        .iter()
+        .map(|directory| {
+            if directory.ends_with("icd.d") {
+                directory.clone()
+            } else {
+                directory.join("vulkan/icd.d")
+            }
+        })
+        .filter_map(|directory| std::fs::read_dir(directory).ok())
+        .flatten()
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".json"))
+        .collect()
+}
+
+/// Names the hardware vendors behind driver manifests. Software renderers
+/// can't run Arma, so they don't count.
+fn vulkan_drivers(manifests: &[String]) -> Vec<&'static str> {
+    let mut drivers = Vec::new();
+    for manifest in manifests {
+        let vendor = match manifest.split(['_', '.']).next().unwrap_or("") {
+            "nvidia" => "NVIDIA",
+            "radeon" | "amd" => "AMD",
+            "intel" => "Intel",
+            "nouveau" => "NVIDIA (Nouveau)",
+            "asahi" => "Apple",
+            _ => continue,
+        };
+        if !drivers.contains(&vendor) {
+            drivers.push(vendor);
+        }
+    }
+    drivers
 }
 
 fn graphics_workaround_check() -> DiagnosticCheck {
@@ -538,4 +600,26 @@ pub fn host_dependencies() -> Vec<HostDependency> {
             "Install the zstd package.",
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_hardware_vulkan_drivers_once() {
+        let manifests = [
+            "nvidia_icd.json",
+            "radeon_icd.x86_64.json",
+            "radeon_icd.i686.json",
+            "lvp_icd.x86_64.json",
+        ]
+        .map(String::from);
+        assert_eq!(vulkan_drivers(&manifests), ["NVIDIA", "AMD"]);
+    }
+
+    #[test]
+    fn software_rendering_alone_is_not_a_driver() {
+        assert!(vulkan_drivers(&["lvp_icd.x86_64.json".into()]).is_empty());
+    }
 }
