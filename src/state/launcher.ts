@@ -17,6 +17,7 @@ export function useLauncher() {
   const [settings, setSettings] = useState<LauncherSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [failures, setFailures] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const saved = useRef<string | null>(null);
   const latest = useRef<LauncherSettings | null>(null);
@@ -55,6 +56,7 @@ export function useLauncher() {
       setSaveError(null);
     } catch (cause) {
       setSaveError(String(cause));
+      setFailures((count) => count + 1);
       throw cause;
     } finally {
       setSaving(false);
@@ -72,6 +74,13 @@ export function useLauncher() {
     const timeout = window.setTimeout(() => void run().catch(() => undefined), 400);
     return () => window.clearTimeout(timeout);
   }, [settings]);
+
+  // A failed save tries again on its own, so "will retry" on the Launch screen holds.
+  useEffect(() => {
+    if (!saveError) return;
+    const timeout = window.setTimeout(() => void run().catch(() => undefined), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [saveError, failures]);
 
   function update<K extends keyof LauncherSettings>(key: K, value: LauncherSettings[K]) {
     setSettings((current) => current ? { ...current, [key]: value } : current);

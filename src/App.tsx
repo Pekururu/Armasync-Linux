@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bytes, plural } from "./format";
 import AddRepository from "./screens/AddRepository";
+import Logo from "./Logo";
 import Health from "./screens/Health";
 import Launch from "./screens/Launch";
 import Mods from "./screens/Mods";
@@ -250,7 +251,7 @@ export default function App() {
   return <div className="as-app">
     <ResizeGrips />
     <nav className="as-rail" aria-label="Main" onKeyDown={navigate} data-tauri-drag-region>
-      <span className="label as-mark" data-tauri-drag-region>A3</span>
+      <span className="as-mark" data-tauri-drag-region><Logo /></span>
       {screens.map((item) => <button key={item.id} type="button" className="k-nav-item as-nav-item" aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
         <span className="k-nav-pill"><Icon name={item.icon} /></span>{item.label}
       </button>)}

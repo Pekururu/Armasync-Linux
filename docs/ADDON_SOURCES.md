@@ -1,7 +1,7 @@
 # Addon search directories
 
-Addon search directories are configured from the **Sources** drawer on the
-Addons tab. They are intentionally not a primary application tab: the folders
+Addon search directories are configured from the **Sources** side sheet on the
+Mods screen. They are intentionally not a screen of their own: the folders
 configure the installed-addon catalog rather than representing a separate
 workflow.
 
@@ -16,7 +16,13 @@ explicitly selects them.
 Removing a source removes only its launcher configuration; it never deletes or
 moves the directory or any files inside it. DLC discovery remains independent
 and automatic because DLC comes from the detected Arma/Steam installation, not
-from mod search directories.
+from mod search directories. The Sources sheet shows DLC as a fixed, locked row
+at the bottom of the list for that reason.
+
+Each source can be opened, turned off, or removed from its ⋯ menu. A source that
+is a saved repository's download folder shows a lock and can't be removed from
+the sheet; remove the repository first. It can still be turned off and
+reordered.
 
 Configuration is written atomically to:
 
@@ -46,7 +52,7 @@ Scanning is deliberately bounded:
 A mod root is recognized by `mod.cpp`, `meta.cpp`, or a case-insensitive
 `addons` directory.
 
-Pressing **Rescan** now rebuilds the installed-addon catalog from every enabled
+Pressing **Rescan** rebuilds the installed-addon catalog from every enabled
 source. Display names come from `meta.cpp`, then `mod.cpp`, with the directory
 name as a fallback.
 
@@ -60,7 +66,8 @@ not create that alias. The authoritative content is stored directly at:
 <Steam library>/steamapps/workshop/content/107410/<published-id>
 ```
 
-The Sources drawer offers **Add Workshop** as an explicit opt-in shortcut. The
+Until Workshop has been added, the Sources sheet lists **Steam Workshop** as a
+row with an **Add** action, as an explicit opt-in. The
 launcher scans only Workshop entries that have a real mod root, ignoring
 scenarios, compositions, and legacy placeholder files. `meta.cpp` supplies the
 published ID and display name where present.

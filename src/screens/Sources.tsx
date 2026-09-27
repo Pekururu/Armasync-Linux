@@ -40,11 +40,10 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
 
   function describe(source: AddonSource) {
     const repository = source.kind === "custom" ? repositoryFor(source.path, repositories) : undefined;
-    const title = repository?.name ?? (source.kind === "game" ? "Arma 3 and DLC" : source.name);
-    const counts = source.kind === "game" ? `${plural(source.addonCount, "mod")}. ${ownedDlc} DLC owned` : plural(source.addonCount, "mod");
-    // Repository folders and the game folder come from elsewhere, so they can't be removed here.
-    const locked = !!repository || source.kind === "game";
-    return { title, sub: `${tidyPath(source.path)}. ${counts}`, locked, repository };
+    const title = repository?.name ?? source.name;
+    // A repository's download folder stays while the repository does; remove the repository first.
+    const locked = !!repository;
+    return { title, sub: `${tidyPath(source.path)}. ${plural(source.addonCount, "mod")}`, locked, repository };
   }
 
   return <Sheet open={open} onClose={onClose} title="Sources" sub="Scanned top to bottom. The first match wins."
@@ -68,7 +67,7 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
               {problem && <Status status={source.status === "disabled" ? "na" : "exception"} cut="var(--surface-sunken)">{problem}</Status>}
             </div>
             <span className="k-row-trail">
-              {locked && <span className="as-lock" title={source.kind === "game" ? "Found in the Arma 3 folder" : "Download folder of a repository"}><Icon name="lock" /></span>}
+              {locked && <span className="as-lock" title="Download folder of a repository. Remove the repository to remove it here."><Icon name="lock" /></span>}
               <MenuButton className="k-btn k-btn-icon" label={`Actions for ${title}`} title="More" disabled={sourceBusy} items={[
                 { label: "Open Folder", onSelect: () => void openPath(source.path) },
                 { label: source.enabled ? "Turn Off" : "Turn On", onSelect: () => void mutateSources("set_addon_source_enabled", { id: source.id, enabled: !source.enabled }) },
@@ -84,6 +83,11 @@ export default function Sources({ open, onClose, catalog, repositories }: { open
         <div className="k-row-body"><span className="k-row-title">Steam Workshop</span><span className="k-row-sub">Not added. Mods you subscribe to in Steam</span></div>
         <span className="k-row-trail"><button type="button" className="k-btn k-btn-quiet as-btn-compact" disabled={sourceBusy} onClick={() => void mutateSources("add_steam_workshop_source", {})}>Add</button></span>
       </div>}
+      <div className="k-row as-static" role="listitem">
+        <span className="as-grip-space" />
+        <div className="k-row-body"><span className="k-row-title">DLC</span><span className="k-row-sub">{catalog.dlcDetection.gameDirectory ? `Found in the Arma 3 folder. ${ownedDlc} owned` : "Found in the Arma 3 folder once Arma is found"}</span></div>
+        <span className="k-row-trail"><span className="as-lock" title="Armasync finds DLC on its own"><Icon name="lock" /></span></span>
+      </div>
       {!sources.length && !sourceBusy && <div className="k-empty"><Icon name="empty" /><p className="k-empty-title">No folders yet</p><p className="k-empty-text">Add a folder that holds @mod folders.</p></div>}
     </div>
 

@@ -80,13 +80,17 @@ export function Menu({ anchor, items, label, onClose, returnFocus }: { anchor: A
   }, []);
 
   useEffect(() => {
-    const close = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) onClose(); };
+    // The button that opened the menu toggles it itself, so a press on it isn't "outside".
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!ref.current?.contains(target) && !returnFocus?.contains(target)) onClose();
+    };
     const blur = () => onClose();
     window.addEventListener("pointerdown", close, true);
     window.addEventListener("blur", blur);
     window.addEventListener("resize", blur);
     return () => { window.removeEventListener("pointerdown", close, true); window.removeEventListener("blur", blur); window.removeEventListener("resize", blur); };
-  }, [onClose]);
+  }, [onClose, returnFocus]);
 
   function close() {
     onClose();

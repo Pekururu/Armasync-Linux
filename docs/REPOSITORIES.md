@@ -1,24 +1,32 @@
 # Repository workflow
 
-The repository tab deliberately preserves the useful Arma3Sync sequence without
+The Repos screen deliberately preserves the useful Arma3Sync sequence without
 copying its crowded nested-tab layout:
 
-1. Add a public `.a3s/autoconfig` HTTPS URL and select or create an addon destination.
-2. Import and validate the auto-config before saving it.
-3. Connect to retrieve the current `.a3s/sync` manifest and `.a3s/events` modsets.
-4. Select all addons or one published modset.
+1. Add a public `.a3s/autoconfig` URL and select or create an addon destination.
+   The dialog inspects the auto-config before anything is saved and shows the
+   repository name, mod count, size, transfer protocol, and the free space left
+   at the destination after download.
+2. **Add And Download** saves the repository, reads its manifest, checks every
+   addon, and synchronizes what is missing.
+3. Opening a saved repository reads the current `.a3s/sync` manifest and
+   `.a3s/events` modsets. Nothing is downloaded in this step.
+4. Select all addons or one published modset. Individual addons can be chosen
+   under **Choose Mods To Sync**.
 5. Create a linked addon group, or update the group previously linked to that modset.
-6. Check local files explicitly, with live progress while hashing.
-7. Review verified, missing, and replacement counts, and the per-addon state
-   marked on every row.
-8. Synchronize explicitly. There is no confirmation dialog: the file counts,
-   transfer size, and download location are already on screen beside the
-   button, and a transfer can be paused or stopped while it runs.
+6. Check local files explicitly with **Check Now** or **Check Again**, with live
+   progress while hashing.
+7. Review **What changed**: every selected addon that is new, changed, or
+   couldn't be matched, with file counts and transfer size.
+8. Synchronize explicitly with **Sync N Changes**. There is no confirmation
+   dialog: what changes and how much is transferred are already on screen, and
+   a transfer can be paused or stopped while it runs.
 
 Checking reports its phase, file counts, and the addon being verified through a
 Tauri channel, on a 120 ms timer — a repository can hold a hundred thousand
-files, so it does not report per file. Each addon row then carries its own mark:
-verified, changed, not installed, or unresolved.
+files, so it does not report per file. Each checked addon is then marked up to
+date, changed, new, or unresolved; only the ones that need work are listed under
+What changed.
 
 Synchronization reports real transferred bytes, percentage, completed files,
 and the current file through a Tauri channel. Transfer speed and remaining time
@@ -34,9 +42,15 @@ Downloads use up to eight persistent FTP connections and schedule larger files
 first. Progress is aggregated across those connections; every completed file is
 still verified in staging before any installed file is replaced.
 
-Saved repositories stay in the left rail. The connected repository occupies the
-right working area, so switching repositories does not create additional nested
-tabs.
+Saved repositories are listed on the left with their status. The selected
+repository fills the right side, so switching repositories does not create
+nested tabs.
+
+Check results are shared with the rest of the app. Play lists each repository's
+state and, when a repository feeding the active addon group has changes, offers
+**Update And Launch**: it synchronizes those repositories, then starts Arma. The
+launch dock shows how many updates are pending. Nothing is checked or downloaded
+in the background.
 
 ## Compatibility
 
@@ -46,7 +60,7 @@ It supports FTP and HTTPS transfers advertised by the repository's auto-config. 
 
 Repository event/modset addon membership is supported. Event data is not treated
 as launch order because Arma3Sync serializes that membership as a Java `HashMap`,
-which has no semantic order. The Addons tab remains the authority for launch
+which has no semantic order. The Mods screen remains the authority for launch
 order. A new linked group uses deterministic repository display order. Updating a
 linked group preserves the manual order of retained members, removes addons no
 longer published, and appends newly published members.
@@ -67,9 +81,10 @@ longer published, and appends newly published members.
   against its size and modification time, so an untouched file is not read
   again on the next check. The remembered hash is still compared against the
   repository's on every check — only the reading is skipped. Touch a file, and
-  it is hashed again. **Full verification** reads and hashes every selected file,
-  bypassing the cache, including files whose timestamps were preserved. Ordinary
-  checks trust size and modification time; they cannot detect every content change.
+  it is hashed again. **Full Verification**, in the repository's ⋯ menu, reads
+  and hashes every selected file, bypassing the cache, including files whose
+  timestamps were preserved. Ordinary checks trust size and modification time;
+  they cannot detect every content change.
 - Checks can be stopped, and synchronization can be stopped while hashing.
   An outstanding network read may need to finish or time out first.
 - Downloads are staged on the destination filesystem and verified before install.
@@ -85,10 +100,12 @@ longer published, and appends newly published members.
 - Repository-declared deletions and untracked local-file deletion are not enabled.
 
 Repository destinations are not automatically added as addon search directories.
-This keeps the explicit-source behavior of the Addons tab. Choose an existing
-source as the destination, or add the destination manually under Addons → Sources.
-The destination editor accepts an existing directory from the native picker or a
-new absolute path, which is created when the setting is saved.
+This keeps the explicit-source behavior of the Mods screen. Choose an existing
+source as the destination, or add the destination manually under Mods → Sources.
+While the repository is saved, that source is locked in the Sources sheet.
+**Change Download Folder**, in the repository's ⋯ menu, accepts an existing
+directory from the native picker or a new absolute path, which is created when
+the setting is saved.
 
 ## Next protocol/UI work
 

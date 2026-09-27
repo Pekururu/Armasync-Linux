@@ -41,8 +41,8 @@ found:
 - All five verb names are valid, but `pfx/winetricks.log` did not exist, meaning
   the failed attempt did not complete installation of any verb.
 
-These warnings are diagnostic context, not a proven root cause. The new TeamSpeak
-tab backs up the prefix once, runs each component separately, stops on the first
+These warnings are diagnostic context, not a proven root cause. Voice setup now
+backs up the prefix once, runs each component separately, stops on the first
 failure, and saves complete output to
 `~/.local/state/armasync/logs/voice-runtime.log`. This turns another status-1
 failure into an actionable component name and log rather than guessing.
@@ -72,11 +72,13 @@ Configuration managers originally notified the shared launch bar only after a
 full save, so newly applied profile and server drafts were absent from its
 selectors. The selectors now reflect drafts immediately, while game launch is
 disabled until those changes are saved so frontend and backend configuration
-cannot disagree.
+cannot disagree. Since the KalmUI redesign, launch settings save automatically,
+so there are no unsaved drafts left to disagree.
 
-The ACRE tab also originally checked TeamSpeak only when opened or manually
-refreshed. While visible, it now performs a lightweight process check every 1.5
-seconds and silently refreshes full voice state when the launcher regains focus.
+The ACRE tab (now Voice) also originally checked TeamSpeak only when opened or
+manually refreshed. While visible, it now performs a lightweight process check
+every 1.5 seconds and silently refreshes full voice state when the launcher
+regains focus.
 
 ## Distinct repository mods disappeared from Addons
 
@@ -96,9 +98,10 @@ as in-memory changes that still required the page-level **Save changes** action.
 Because the launch selectors reflected those drafts immediately, the entries
 looked committed even though no `launcher.toml` had been written.
 
-Profile and server Apply, Edit, and Remove actions now persist immediately. The
-page-level save remains for general launch-option changes. A failed managed-item
-write stays visible as an unsaved draft and reports the storage error.
+Profile and server Apply, Edit, and Remove actions then persisted immediately.
+Since the KalmUI redesign there is no page-level save at all: every launch
+setting saves automatically shortly after it changes, and a failed write is
+shown on the Launch screen with the storage error.
 
 ## Launch reported success but Arma never started
 
@@ -111,20 +114,27 @@ Game launch now sets the Arma installation as the child working directory. It
 also observes the Protontricks process during initial startup and reports an
 early exit with the diagnostic log path instead of immediately claiming success.
 
-## Troubleshooting workspace
+## Health screen
 
-The in-app Troubleshooting tab provides read-only checks for Arma, its Proton
-environment, Protontricks, Vulkan, PipeWire, the selected Proton version, addon
-sources, TeamSpeak/ACRE, free storage, and the NVIDIA/WebKit workaround.
+The in-app Health screen (formerly Troubleshooting) provides read-only checks for
+Arma, its Proton environment, Protontricks, Vulkan, PipeWire, the selected
+Proton version, addon sources, TeamSpeak/ACRE, free storage, and the
+NVIDIA/WebKit workaround. It also lists host tools Armasync needs that aren't
+installed.
 
-It also exposes quick links to the game, compatibility files, Arma profiles, and
-launcher logs; the newest Arma RPT; and an inventory of launcher-created prefix
-backups. Backups are never removed automatically.
+Problems come first, each with its cause, a copyable fix command when one is
+known, and **Check Again**. Notices are rows with one action each. Passed checks
+fold into **N Checks Passed**. Play shows the same problems in its readiness
+list.
+
+The Folders card links to the game, compatibility files, Arma profiles, and
+launcher logs, plus the newest Arma RPT and older logs. The Repairs card lists
+launcher-created prefix backups. Backups are never removed automatically.
 
 Support bundles are written to `~/Downloads` when available. They contain the
 diagnostic report, recent launcher logs, the newest RPT, and launcher settings.
 Repository credentials and TeamSpeak identity data are not collected.
 
-The MFC/VC140 action remains behind Advanced maintenance and an explicit warning.
+The MFC/VC140 action sits in the Repairs card behind an explicit warning.
 It creates a prefix restore point and should only be used when an ACRE extension
 error specifically reports that missing runtime.
