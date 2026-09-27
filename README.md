@@ -156,9 +156,9 @@ These are being worked on for v0.6.0.
 - **Compressed repositories don't sync yet.** If your unit builds its
   repository with Arma3Sync's compression option, the sync stops with
   "compressed repository entry is not supported yet". Checking still works.
-- **Changed files download whole.** Arma3Sync can download only the parts of a
-  file that changed. Armasync downloads the whole file again, so a small patch
-  to a big mod takes as long as the first download.
+- **Changed files download whole over FTP.** On HTTPS repositories Armasync
+  downloads only the parts of a file that changed, like Arma3Sync. FTP
+  repositories don't support that, so a changed file downloads again in full.
 - **Updates aren't checked on their own.** Nothing checks in the background.
   Open **Repos** and press **Check Now** to see whether your unit changed mods.
 - **Armasync doesn't know when Arma is running.** Launch works a second time,

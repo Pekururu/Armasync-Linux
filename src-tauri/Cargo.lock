@@ -54,6 +54,7 @@ dependencies = [
  "flate2",
  "fs2",
  "jaded",
+ "md4",
  "regex",
  "reqwest 0.12.28",
  "rustix",
@@ -2075,6 +2076,15 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
+]
+
+[[package]]
+name = "md4"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da5ac363534dce5fabf69949225e174fbf111a498bf0ff794c8ea1fba9f3dda"
+dependencies = [
+ "digest",
 ]
 
 [[package]]

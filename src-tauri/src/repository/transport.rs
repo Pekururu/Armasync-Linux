@@ -253,7 +253,7 @@ pub(super) fn stage_downloads<F>(
     total_bytes: u64,
     control: &SyncControl,
     on_progress: &F,
-) -> Result<(), RepositoryError>
+) -> Result<u64, RepositoryError>
 where
     F: Fn(SyncProgress) + Sync,
 {
@@ -261,6 +261,7 @@ where
     let next_entry = AtomicUsize::new(0);
     let completed_files = AtomicUsize::new(0);
     let downloaded_bytes = AtomicU64::new(0);
+    let reused_bytes = AtomicU64::new(0);
     let failed = AtomicBool::new(false);
     let failure = Mutex::new(None::<RepositoryError>);
     let progress_gate = Mutex::new((0_u64, Instant::now()));
@@ -307,6 +308,7 @@ where
                                 control,
                                 &failed,
                                 &downloaded_bytes,
+                                &reused_bytes,
                                 &completed_files,
                                 &progress_gate,
                                 on_progress,
@@ -362,7 +364,7 @@ where
     if let Some(error) = failure.take() {
         Err(error)
     } else {
-        Ok(())
+        Ok(reused_bytes.load(Ordering::Acquire))
     }
 }
 
@@ -418,6 +420,7 @@ pub(super) fn download_entry_https<F>(
     control: &SyncControl,
     failed: &AtomicBool,
     downloaded_bytes: &AtomicU64,
+    reused_bytes: &AtomicU64,
     completed_files: &AtomicUsize,
     progress_gate: &Mutex<(u64, Instant)>,
     on_progress: &F,
@@ -427,12 +430,12 @@ where
 {
     let ready = staging_path(entry);
     let target = ready.with_extension("part");
-    match staging_root.remove(&target) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(local_error(error)),
-    }
-    let mut file = staging_root.create(&target).map_err(local_error)?;
+    let remove_target = || match staging_root.remove(&target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(local_error(error)),
+    };
+    remove_target()?;
     let remote = entry.remote_path.to_string_lossy().replace('\\', "/");
     let current_file = entry.local_path.to_string_lossy().into_owned();
     emit_download_progress(
@@ -445,7 +448,79 @@ where
         on_progress,
         true,
     )?;
+    let before_read = || {
+        control.checkpoint()?;
+        if failed.load(Ordering::Acquire) {
+            Err(RepositoryError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
+    let after_write = |count: u64| {
+        downloaded_bytes.fetch_add(count, Ordering::AcqRel);
+        emit_download_progress(
+            downloaded_bytes,
+            completed_files,
+            total_bytes,
+            total_files,
+            &current_file,
+            progress_gate,
+            on_progress,
+            false,
+        )
+    };
 
+    if zsync::worth_trying(endpoint, entry) {
+        let mut credit = zsync::Credit::default();
+        let built = zsync::build_partial(
+            client,
+            endpoint,
+            entry,
+            staging_root,
+            &target,
+            control,
+            &mut before_read.clone(),
+            &mut credit,
+            &mut after_write.clone(),
+        )
+        .and_then(|built| {
+            if built {
+                verify_file(
+                    staging_root,
+                    &target,
+                    entry.size,
+                    entry.sha1.as_deref(),
+                    control,
+                )?;
+            }
+            Ok(built)
+        });
+        match built {
+            Ok(true) => {
+                reused_bytes.fetch_add(credit.reused, Ordering::AcqRel);
+                return finish_download(
+                    staging_root,
+                    &target,
+                    &ready,
+                    downloaded_bytes,
+                    completed_files,
+                    total_bytes,
+                    total_files,
+                    &current_file,
+                    progress_gate,
+                    on_progress,
+                );
+            }
+            Err(RepositoryError::Cancelled) => return Err(RepositoryError::Cancelled),
+            // Anything else falls back to downloading the whole file.
+            Ok(false) | Err(_) => {
+                downloaded_bytes.fetch_sub(credit.progress, Ordering::AcqRel);
+                remove_target()?;
+            }
+        }
+    }
+
+    let mut file = staging_root.create(&target).map_err(local_error)?;
     let mut response = https_request(client, endpoint, &remote)?;
     if response
         .content_length()
@@ -458,27 +533,8 @@ where
         &mut file,
         entry.size,
         &remote,
-        || {
-            control.checkpoint()?;
-            if failed.load(Ordering::Acquire) {
-                Err(RepositoryError::Cancelled)
-            } else {
-                Ok(())
-            }
-        },
-        |count| {
-            downloaded_bytes.fetch_add(count as u64, Ordering::AcqRel);
-            emit_download_progress(
-                downloaded_bytes,
-                completed_files,
-                total_bytes,
-                total_files,
-                &current_file,
-                progress_gate,
-                on_progress,
-                false,
-            )
-        },
+        before_read,
+        |count| after_write(count as u64),
     )?;
     file.sync_all()
         .map_err(|error| RepositoryError::Sync(error.to_string()))?;
@@ -490,9 +546,10 @@ where
         entry.sha1.as_deref(),
         control,
     )?;
-    staging_root.rename(&target, &ready).map_err(local_error)?;
-    completed_files.fetch_add(1, Ordering::AcqRel);
-    emit_download_progress(
+    finish_download(
+        staging_root,
+        &target,
+        &ready,
         downloaded_bytes,
         completed_files,
         total_bytes,
@@ -500,9 +557,37 @@ where
         &current_file,
         progress_gate,
         on_progress,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish_download<F>(
+    staging_root: &Directory,
+    target: &Path,
+    ready: &Path,
+    downloaded_bytes: &AtomicU64,
+    completed_files: &AtomicUsize,
+    total_bytes: u64,
+    total_files: usize,
+    current_file: &str,
+    progress_gate: &Mutex<(u64, Instant)>,
+    on_progress: &F,
+) -> Result<(), RepositoryError>
+where
+    F: Fn(SyncProgress) + Sync,
+{
+    staging_root.rename(target, ready).map_err(local_error)?;
+    completed_files.fetch_add(1, Ordering::AcqRel);
+    emit_download_progress(
+        downloaded_bytes,
+        completed_files,
+        total_bytes,
+        total_files,
+        current_file,
+        progress_gate,
+        on_progress,
         true,
-    )?;
-    Ok(())
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -88,6 +88,14 @@ longer published, and appends newly published members.
 - Checks can be stopped, and synchronization can be stopped while hashing.
   An outstanding network read may need to finish or time out first.
 - Downloads are staged on the destination filesystem and verified before install.
+- On HTTPS repositories, a changed file of 1 MiB or more is patched rather than
+  downloaded whole. Arma3Sync writes a `.zsync` file next to every file of an
+  HTTP repository. Armasync reads it, reuses every block the local copy already
+  has, even where the change shifted it, and fetches only the rest with HTTP
+  range requests. The rebuilt file is SHA-1 checked like any other download.
+  When the `.zsync` file is missing or stale, the server ignores ranges, or the
+  check fails, that file downloads whole instead. FTP repositories have no
+  `.zsync` files and always download whole files.
 - Replaced files are not backed up. The repository is the source of truth, so
   any file it replaced can be fetched again by checking and synchronizing.
 - An interrupted installation leaves the files it already installed in place.

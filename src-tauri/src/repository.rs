@@ -5,6 +5,7 @@ mod planning;
 #[cfg(test)]
 mod tests;
 mod transport;
+mod zsync;
 use decoding::*;
 use installation::*;
 use planning::*;

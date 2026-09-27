@@ -161,6 +161,7 @@ where
             downloads.push(*entry);
         }
     }
+    let mut reused_bytes = 0;
     let transfer_bytes = downloads
         .iter()
         .fold(0u64, |sum, entry| sum.saturating_add(entry.size));
@@ -173,7 +174,7 @@ where
             )));
         }
         // Completed files survive failure/cancellation; partial files are replaced on retry.
-        stage_downloads(
+        reused_bytes = stage_downloads(
             endpoint,
             &downloads,
             root,
@@ -220,7 +221,7 @@ where
     }
     Ok(SyncResult {
         installed_files: entries.len(),
-        downloaded_bytes: transfer_bytes,
+        downloaded_bytes: transfer_bytes - reused_bytes,
         destination: destination.to_string_lossy().into_owned(),
     })
 }
