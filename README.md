@@ -1,3 +1,6 @@
+> [!WARNING]
+> **No longer maintained.** This project is archived and won't receive updates, fixes or support. The code stays available: fork it if you want to keep it going. The AUR package is orphaned and open for adoption.
+
 <div align="center">
 
 <picture>
